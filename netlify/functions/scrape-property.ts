@@ -93,7 +93,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
     }
 };
 
-function scrapeMLS($: cheerio.CheerioAPI, url: string): PropertyData {
+function scrapeMLS($: ReturnType<typeof cheerio.load>, url: string): PropertyData {
     // MLS-specific selectors (these are examples - need to be verified)
     const title = $("h1.property-title, .listing-title").first().text().trim();
     const price = $(".price, .listing-price").first().text().trim();
@@ -122,7 +122,7 @@ function scrapeMLS($: cheerio.CheerioAPI, url: string): PropertyData {
     return { title, price, location, bedrooms, bathrooms, area, description, features, images, source: "MLS ACOBIR" };
 }
 
-function scrapeEncuentra24($: cheerio.CheerioAPI, url: string): PropertyData {
+function scrapeEncuentra24($: ReturnType<typeof cheerio.load>, url: string): PropertyData {
     const title = $("h1[class*='title'], .ad-title").first().text().trim();
     const price = $("[class*='price']").first().text().trim();
     const location = $("[class*='location'], .breadcrumb").first().text().trim();
@@ -150,7 +150,7 @@ function scrapeEncuentra24($: cheerio.CheerioAPI, url: string): PropertyData {
     return { title, price, location, bedrooms, bathrooms, area, description, features, images, source: "Encuentra24" };
 }
 
-function scrapeJamesEdition($: cheerio.CheerioAPI, url: string): PropertyData {
+function scrapeJamesEdition($: ReturnType<typeof cheerio.load>, url: string): PropertyData {
     const title = $("h1.listing-title, h1[class*='title']").first().text().trim();
     const price = $(".price, [class*='price']").first().text().trim();
     const location = $(".location, [class*='location']").first().text().trim();
