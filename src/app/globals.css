@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-navy: #0A1628;
+  --color-brand-gold: #D4AF37;
+  --color-brand-goldHover: #b8952b;
+  --color-brand-light: #F8FAFC;
+
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-montserrat);
+
+  --image-glass-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+}
+
+:root {
+  --foreground-rgb: 248, 250, 252;
+  --background-start-rgb: 10, 22, 40;
+  --background-end-rgb: 8, 18, 32;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))) rgb(var(--background-start-rgb));
+}
+
+@layer components {
+  .glass-card {
+    @apply backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-xl transition-all duration-300;
+  }
+
+  .glass-btn {
+    @apply backdrop-blur-md bg-brand-gold/90 text-brand-navy font-bold rounded-lg px-6 py-3 uppercase tracking-wider hover:bg-brand-goldHover hover:scale-105 transition-all duration-300 border border-brand-gold/50 shadow-md;
+  }
+
+  .glass-btn:hover {
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
+  }
+
+  .glass-btn-secondary {
+    @apply backdrop-blur-md bg-white/10 text-white font-semibold rounded-lg px-6 py-3 hover:bg-white/20 transition-all duration-300 border border-white/20;
+  }
+
+  .glass-input {
+    @apply backdrop-blur-sm bg-black/20 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-brand-gold/50 focus:bg-black/30 placeholder-white/30 transition-all;
+  }
+}
