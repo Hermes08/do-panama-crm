@@ -94,28 +94,62 @@ export const handler: Handler = async (event: HandlerEvent) => {
 };
 
 function scrapeMLS($: ReturnType<typeof cheerio.load>, url: string): PropertyData {
-    // MLS-specific selectors (these are examples - need to be verified)
-    const title = $("h1.property-title, .listing-title").first().text().trim();
-    const price = $(".price, .listing-price").first().text().trim();
-    const location = $(".location, .property-location").first().text().trim();
-    const bedrooms = $(".bedrooms, [class*='bed']").first().text().trim();
-    const bathrooms = $(".bathrooms, [class*='bath']").first().text().trim();
-    const area = $(".area, .square-feet, [class*='sqft']").first().text().trim();
-    const description = $(".description, .property-description").first().text().trim();
+    // Try multiple selectors for better data extraction
+    const title = $("h1, .property-title, .listing-title, [class*='title']").first().text().trim() || "Property Listing";
+
+    const price = $(".price, .listing-price, [class*='price'], [class*='Price']").first().text().trim() ||
+        $("span:contains('$'), div:contains('$')").first().text().trim() || "Price on Request";
+
+    const location = $(".location, .property-location, [class*='location'], .address, [class*='address']").first().text().trim() ||
+        $("span:contains('Panama'), div:contains('Panama')").first().text().trim() || "Panama";
+
+    // Extract bedrooms with multiple patterns
+    let bedrooms = $(".bedrooms, [class*='bed'], [class*='Bed']").first().text().trim();
+    if (!bedrooms) {
+        const bedroomMatch = $.html().match(/(\d+)\s*(bed|bedroom|habitaci)/i);
+        bedrooms = bedroomMatch ? bedroomMatch[1] + " beds" : "";
+    }
+
+    // Extract bathrooms
+    let bathrooms = $(".bathrooms, [class*='bath'], [class*='Bath']").first().text().trim();
+    if (!bathrooms) {
+        const bathroomMatch = $.html().match(/(\d+\.?\d*)\s*(bath|baño)/i);
+        bathrooms = bathroomMatch ? bathroomMatch[1] + " baths" : "";
+    }
+
+    // Extract area
+    let area = $(".area, .square-feet, [class*='sqft'], [class*='m2'], [class*='area']").first().text().trim();
+    if (!area) {
+        const areaMatch = $.html().match(/(\d+[,\d]*)\s*(m2|sqft|sq ft)/i);
+        area = areaMatch ? areaMatch[0] : "";
+    }
+
+    // Description - try multiple selectors
+    const description = $(".description, .property-description, [class*='description'], p").filter((_, el) => {
+        const text = $(el).text();
+        return text.length > 100; // Get longest paragraph
+    }).first().text().trim() || "Luxury property in Panama";
 
     const features: string[] = [];
-    $(".features li, .amenities li").each((_, el) => {
+    $(".features li, .amenities li, ul li, [class*='feature'] li").each((_, el) => {
         const feature = $(el).text().trim();
-        if (feature && !feature.toLowerCase().includes("contacto") && !feature.toLowerCase().includes("agente")) {
+        if (feature && feature.length > 3 && feature.length < 100 &&
+            !feature.toLowerCase().includes("contacto") &&
+            !feature.toLowerCase().includes("agente") &&
+            !feature.toLowerCase().includes("whatsapp")) {
             features.push(feature);
         }
     });
 
     const images: string[] = [];
-    $("img[src*='property'], .gallery img, .slider img").each((_, el) => {
-        const src = $(el).attr("src");
-        if (src && !src.includes("logo") && !src.includes("avatar")) {
-            images.push(src.startsWith("http") ? src : new URL(src, url).href);
+    $("img").each((_, el) => {
+        const src = $(el).attr("src") || $(el).attr("data-src") || $(el).attr("data-lazy");
+        if (src && !src.includes("logo") && !src.includes("avatar") && !src.includes("icon") &&
+            (src.includes("property") || src.includes("photo") || src.includes("image") || src.includes("img"))) {
+            const fullSrc = src.startsWith("http") ? src : new URL(src, url).href;
+            if (!images.includes(fullSrc)) {
+                images.push(fullSrc);
+            }
         }
     });
 
@@ -123,27 +157,52 @@ function scrapeMLS($: ReturnType<typeof cheerio.load>, url: string): PropertyDat
 }
 
 function scrapeEncuentra24($: ReturnType<typeof cheerio.load>, url: string): PropertyData {
-    const title = $("h1[class*='title'], .ad-title").first().text().trim();
-    const price = $("[class*='price']").first().text().trim();
-    const location = $("[class*='location'], .breadcrumb").first().text().trim();
-    const bedrooms = $("[class*='bedroom'], [data-cy='bedrooms']").first().text().trim();
-    const bathrooms = $("[class*='bathroom'], [data-cy='bathrooms']").first().text().trim();
-    const area = $("[class*='area'], [class*='m2']").first().text().trim();
-    const description = $("[class*='description'], .ad-description").first().text().trim();
+    const title = $("h1, [class*='title'], .ad-title").first().text().trim() || "Property for Sale";
+    const price = $("[class*='price'], [class*='Price']").first().text().trim() || "Contact for Price";
+    const location = $("[class*='location'], .breadcrumb, [class*='address']").first().text().trim() || "Panama";
+
+    let bedrooms = $("[class*='bedroom'], [data-cy='bedrooms'], [class*='Bed']").first().text().trim();
+    if (!bedrooms) {
+        const match = $.html().match(/(\d+)\s*(hab|bed|rec)/i);
+        bedrooms = match ? match[1] + " beds" : "";
+    }
+
+    let bathrooms = $("[class*='bathroom'], [data-cy='bathrooms'], [class*='Bath']").first().text().trim();
+    if (!bathrooms) {
+        const match = $.html().match(/(\d+\.?\d*)\s*(baño|bath)/i);
+        bathrooms = match ? match[1] + " baths" : "";
+    }
+
+    let area = $("[class*='area'], [class*='m2'], [class*='superficie']").first().text().trim();
+    if (!area) {
+        const match = $.html().match(/(\d+[,\d]*)\s*m2/i);
+        area = match ? match[0] : "";
+    }
+
+    const description = $("[class*='description'], .ad-description, [class*='desc'], p").filter((_, el) => {
+        return $(el).text().length > 100;
+    }).first().text().trim() || "Beautiful property in Panama";
 
     const features: string[] = [];
-    $("[class*='feature'] li, .characteristics li").each((_, el) => {
+    $("[class*='feature'] li, .characteristics li, ul li").each((_, el) => {
         const feature = $(el).text().trim();
-        if (feature && !feature.toLowerCase().includes("contacto") && !feature.toLowerCase().includes("agente")) {
+        if (feature && feature.length > 3 && feature.length < 100 &&
+            !feature.toLowerCase().includes("contacto") &&
+            !feature.toLowerCase().includes("agente") &&
+            !feature.toLowerCase().includes("whatsapp")) {
             features.push(feature);
         }
     });
 
     const images: string[] = [];
-    $("img[class*='gallery'], img[class*='photo']").each((_, el) => {
-        const src = $(el).attr("src") || $(el).attr("data-src");
-        if (src && !src.includes("logo")) {
-            images.push(src.startsWith("http") ? src : new URL(src, url).href);
+    $("img").each((_, el) => {
+        const src = $(el).attr("src") || $(el).attr("data-src") || $(el).attr("data-lazy");
+        if (src && !src.includes("logo") && !src.includes("icon") &&
+            (src.includes("photo") || src.includes("image") || src.includes("img") || src.includes("property"))) {
+            const fullSrc = src.startsWith("http") ? src : new URL(src, url).href;
+            if (!images.includes(fullSrc)) {
+                images.push(fullSrc);
+            }
         }
     });
 
