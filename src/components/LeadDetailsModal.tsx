@@ -100,9 +100,11 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                                     onChange={(e) => handleChange('status', e.target.value)}
                                 >
                                     <option value=" En seguimiento">En seguimiento</option>
-                                    <option value=" Pendiente respuesta">Pendiente respuesta</option>
-                                    <option value=" No seguimiento">No seguimiento</option>
-                                    <option value="Cliente activo">Cliente activo</option>
+                                    <option value=" Pendiente respuesta">{lang === 'es' ? 'Pendiente respuesta' : 'Pending Reply'}</option>
+                                    <option value=" No seguimiento">{lang === 'es' ? 'No seguimiento' : 'No Follow Up'}</option>
+                                    <option value="Cliente activo">{lang === 'es' ? 'Cliente activo' : 'Active Client'}</option>
+                                    <option value="En Cierre">{lang === 'es' ? 'En Cierre' : 'Closing Process'}</option>
+                                    <option value="Prospecto">{lang === 'es' ? 'Prospecto' : 'Prospect'}</option>
                                 </select>
                             ) : (
                                 <span className="text-brand-gold/80">{client.status}</span>

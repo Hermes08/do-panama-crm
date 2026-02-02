@@ -13,7 +13,8 @@ export const translations = {
             total: "Total",
             hot: "Hot Leads",
             active: "Activos",
-            suspicious: "Sospechosos"
+            suspicious: "Sospechosos",
+            closing: "En Cierre"
         },
         buttons: {
             download: "Descargar Excel",
@@ -44,7 +45,8 @@ export const translations = {
             "Prospecto": "Prospecto",
             "Cliente perdido": "Cliente perdido",
             "Congelado": "Congelado",
-            "⚫ Congelado": "Congelado"
+            "⚫ Congelado": "Congelado",
+            "En Cierre": "En Cierre"
         },
         tags: {
             "Hot": "Caliente",
@@ -59,7 +61,8 @@ export const translations = {
             "Caótico": "Caótico",
             "裡 Caótico": "Caótico",
             "Dormido": "Dormido",
-            " Dormido": "Dormido"
+            " Dormido": "Dormido",
+            "Cierre": "Cierre"
         }
     },
     en: {
@@ -76,7 +79,8 @@ export const translations = {
             total: "Total",
             hot: "Hot Leads",
             active: "Active",
-            suspicious: "Suspicious"
+            suspicious: "Suspicious",
+            closing: "Closing"
         },
         buttons: {
             download: "Download Excel",
@@ -107,7 +111,8 @@ export const translations = {
             "Prospecto": "Prospect",
             "Cliente perdido": "Lost Client",
             "Congelado": "Frozen",
-            "⚫ Congelado": "Frozen"
+            "⚫ Congelado": "Frozen",
+            "En Cierre": "Closing Process"
         },
         tags: {
             "Hot": "Hot",
@@ -122,7 +127,9 @@ export const translations = {
             "Caótico": "Chaotic",
             "裡 Caótico": "Chaotic",
             "Dormido": "Sleeping",
-            " Dormido": "Sleeping"
+            " Dormido": "Sleeping",
+            "Cierre": "Closing"
         }
     }
 };
+

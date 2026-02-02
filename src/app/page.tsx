@@ -63,6 +63,7 @@ export default function Home() {
             hot: clientsData.filter(c => c.tag?.toLowerCase().includes("hot") || c.tag?.includes("🔥")).length,
             active: clientsData.filter(c => c.status?.toLowerCase().includes("seguimiento") || c.status?.toLowerCase().includes("pendiente") || c.status?.toLowerCase().includes("active")).length,
             suspicious: clientsData.filter(c => c.tag?.toLowerCase().includes("sospechoso") || c.tag?.includes("⚠️")).length,
+            closing: clientsData.filter(c => c.status === "En Cierre" || c.tag?.toLowerCase().includes("cierre")).length,
         };
     }, [clientsData]);
 
@@ -77,6 +78,8 @@ export default function Home() {
             data = data.filter(c => c.status?.toLowerCase().includes("seguimiento") || c.status?.toLowerCase().includes("pendiente") || c.status?.toLowerCase().includes("active"));
         } else if (statusFilter === "suspicious") {
             data = data.filter(c => c.tag?.toLowerCase().includes("sospechoso") || c.tag?.includes("⚠️"));
+        } else if (statusFilter === "closing") {
+            data = data.filter(c => c.status === "En Cierre" || c.tag?.toLowerCase().includes("cierre"));
         }
 
         // Search Filtering
@@ -279,10 +282,11 @@ export default function Home() {
                 <>
                     {/* Stats Grid */}
                     {activeTab === 'dashboard' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                             {[
                                 { label: t.stats.total, value: stats.total, icon: User, type: null },
                                 { label: t.stats.hot, value: stats.hot, icon: Zap, color: "text-brand-gold", type: "hot" },
+                                { label: t.stats.closing, value: stats.closing, icon: Briefcase, color: "text-purple-400", type: "closing" },
                                 { label: t.stats.active, value: stats.active, icon: AlertTriangle, color: "text-green-400", type: "active" },
                                 { label: t.stats.suspicious, value: stats.suspicious, icon: HelpCircle, color: "text-orange-300", type: "suspicious" },
                             ].map((stat, i) => (
@@ -294,7 +298,7 @@ export default function Home() {
                                     `}
                                 >
                                     <div>
-                                        <p className="text-sm uppercase tracking-wider text-white/50 mb-1">{stat.label}</p>
+                                        <p className="text-xs uppercase tracking-wider text-white/50 mb-1">{stat.label}</p>
                                         <p className={`text-4xl font-bold ${stat.color || 'text-white'}`}>{stat.value}</p>
                                     </div>
                                     <stat.icon className={`w-8 h-8 opacity-50 group-hover:opacity-100 transition-opacity ${stat.color || 'text-white'}`} />
