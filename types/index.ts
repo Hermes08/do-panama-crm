@@ -19,6 +19,11 @@ export interface Client {
     detailed_notes?: string;
     created_at?: string;
     updated_at?: string;
+    // Additional fields for AI logic and data completeness
+    email?: string;
+    phone?: string;
+    notes?: string;
+    country?: string;
 }
 
 export interface ClientVersion {
