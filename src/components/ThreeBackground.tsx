@@ -6,7 +6,7 @@ import { useRef, useMemo } from "react";
 import * as THREE from "three";
 
 function ParticleField(props: any) {
-    const ref = useRef<any>();
+    const ref = useRef<any>(null);
 
     // Generate random points on a sphere
     const count = 2000;
