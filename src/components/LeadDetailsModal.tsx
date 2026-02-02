@@ -78,12 +78,19 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                             )}
 
                             {isEditing ? (
-                                <input
-                                    className="bg-white/10 border border-white/20 rounded px-2 py-1 text-xs font-bold w-32"
+                                <select
+                                    className="bg-black/50 border border-white/20 rounded px-2 py-1 text-xs font-bold w-32"
                                     value={formData.tag || ""}
                                     onChange={(e) => handleChange('tag', e.target.value)}
-                                    placeholder="Tag (e.g. Hot)"
-                                />
+                                >
+                                    <option value="Hot">🔥 Hot</option>
+                                    <option value="Mirando"> Mirando</option>
+                                    <option value="Frío">流 Frío</option>
+                                    <option value="Sospechoso">⚠️ Sospechoso</option>
+                                    <option value="Caótico">裡 Caótico</option>
+                                    <option value="Dormido"> Dormido</option>
+                                    <option value="Cierre">Cierre</option>
+                                </select>
                             ) : (
                                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${client.tag?.includes("Hot") ? "bg-brand-gold text-brand-navy" : "bg-white/10 text-white"}`}>
                                     {client.tag || "Sin etiqueta"}

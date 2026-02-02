@@ -104,6 +104,27 @@ export default function Home() {
         }
     };
 
+    // Proactive AI Suggestions
+    useEffect(() => {
+        if (activeTab === 'chat' && chatHistory.length === 1) { // Only if just opened and empty
+            const missing = clientsData.filter(c => !c.budget || !c.next_action_date).length;
+            const currentMonth = "2026-02"; // Mock current month
+            const upcomingTravel = clientsData.filter(c => c.estimated_travel_date?.startsWith(currentMonth)).length;
+            const upcomingActions = clientsData.filter(c => c.next_action_date?.startsWith(currentMonth)).length;
+
+            let proactiveMsg = "";
+            if (lang === 'es') {
+                proactiveMsg = `👋 ¡Hola! He revisado tu CRM automáticamente.\n\n• **${missing}** clientes tienen datos faltantes.\n• **${upcomingTravel}** clientes viajan este mes (${currentMonth}).\n• **${upcomingActions}** acciones pendientes para este mes.\n\n¿Quieres que detalle alguno de estos grupos?`;
+            } else {
+                proactiveMsg = `👋 Hi! I automatically reviewed your CRM.\n\n• **${missing}** clients have missing data.\n• **${upcomingTravel}** clients are traveling this month (${currentMonth}).\n• **${upcomingActions}** pending actions for this month.\n\nWant me to detail any of these groups?`;
+            }
+
+            setTimeout(() => {
+                setChatHistory(prev => [...prev, { role: 'ai', content: proactiveMsg }]);
+            }, 600);
+        }
+    }, [activeTab, clientsData, lang]);
+
     const handleSendMessage = async () => {
         if (!chatMessage.trim()) return;
 
@@ -259,23 +280,40 @@ export default function Home() {
                     <h2 className="font-heading text-2xl font-bold mb-6">{t.labels.dates}</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {/* Upcoming Months Logic (Mock for now, real sorting later) */}
-                        {['February 2026', 'March 2026', 'April 2026'].map(month => (
-                            <div key={month} className="bg-white/5 rounded-xl border border-white/5 p-4">
-                                <h3 className="text-lg font-bold text-brand-gold mb-3">{month}</h3>
-                                <div className="space-y-3">
-                                    {clientsData.filter(c => c.estimated_travel_date?.includes(month.split(' ')[0]) || c.next_action_date?.includes('2026-02') /* Rough filter for demo */).slice(0, 3).map(c => (
-                                        <div key={c.id} onClick={() => setSelectedClient(c)} className="p-3 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer transition-colors">
-                                            <p className="font-bold text-sm">{c.full_name}</p>
-                                            <div className="flex justify-between text-xs text-white/50 mt-1">
-                                                <span>{c.next_action}</span>
-                                                <span className="text-blue-300">{c.estimated_travel_date}</span>
+                        {['2026-02', '2026-03', '2026-04'].map((monthKey, idx) => {
+                            // Helper to display clean month name (e.g. "February 2026")
+                            const dateObj = new Date(monthKey + '-01');
+                            const displayParams = { month: 'long', year: 'numeric' } as const;
+                            const displayName = lang === 'es'
+                                ? dateObj.toLocaleDateString('es-ES', displayParams)
+                                : dateObj.toLocaleDateString('en-US', displayParams);
+
+                            // Upper case first letter for Spanish
+                            const finalDisplayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+
+                            return (
+                                <div key={monthKey} className="bg-white/5 rounded-xl border border-white/5 p-4">
+                                    <h3 className="text-lg font-bold text-brand-gold mb-3">{finalDisplayName}</h3>
+                                    <div className="space-y-3">
+                                        {clientsData.filter(c => {
+                                            // Strict Filter: Match exactly YYYY-MM
+                                            const travelMatch = c.estimated_travel_date && c.estimated_travel_date.startsWith(monthKey);
+                                            const actionMatch = c.next_action_date && c.next_action_date.startsWith(monthKey);
+                                            return travelMatch || actionMatch;
+                                        }).slice(0, 5).map(c => (
+                                            <div key={c.id} onClick={() => setSelectedClient(c)} className="p-3 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer transition-colors">
+                                                <p className="font-bold text-sm">{c.full_name}</p>
+                                                <div className="flex justify-between text-xs text-white/50 mt-1">
+                                                    <span>{c.next_action}</span>
+                                                    <span className="text-blue-300">{c.estimated_travel_date}</span>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
-                                    {clientsData.filter(c => c.estimated_travel_date?.includes(month.split(' ')[0])).length === 0 && <p className="text-xs text-white/30 italic">No events</p>}
+                                        ))}
+                                        {clientsData.filter(c => (c.estimated_travel_date && c.estimated_travel_date.startsWith(monthKey)) || (c.next_action_date && c.next_action_date.startsWith(monthKey))).length === 0 && <p className="text-xs text-white/30 italic">No events</p>}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 </div>
             ) : (
