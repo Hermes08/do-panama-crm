@@ -44,10 +44,12 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
         setSaving(true);
         try {
             if (isNew) {
-                // CREATE
+                // CREATE - Provide a UUID from frontend because DB default might be missing
+                const newId = crypto.randomUUID();
                 const { data, error } = await supabase
                     .from('crm_clients')
                     .insert([{
+                        id: newId,
                         full_name: formData.full_name,
                         status: formData.status,
                         tag: formData.tag,
