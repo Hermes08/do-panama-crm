@@ -495,6 +495,13 @@ export default function Home() {
                 </>
             )}
 
+            {/* Property PDF Generator Tab */}
+            {activeTab === 'propiedades' && (
+                <div className="glass-card p-8">
+                    <PropertyPDFGenerator lang={lang} />
+                </div>
+            )}
+
             {/* LeadDetailsModal */}
             <LeadDetailsModal
                 isOpen={!!selectedClient || isCreatingClient}
