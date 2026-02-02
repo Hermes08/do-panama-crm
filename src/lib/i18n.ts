@@ -7,7 +7,8 @@ export const translations = {
             dashboard: "Dashboard",
             clientes: "Clientes",
             chat: "Chat AI",
-            calendar: "Calendario"
+            calendar: "Calendario",
+            propiedades: "Propiedades"
         },
         stats: {
             total: "Total",
@@ -74,7 +75,8 @@ export const translations = {
             dashboard: "Dashboard",
             clientes: "Clients",
             chat: "AI Chat",
-            calendar: "Calendar"
+            calendar: "Calendar",
+            propiedades: "Properties"
         },
         stats: {
             total: "Total",
