@@ -179,7 +179,7 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
             </div>
 
             {/* URL Input */}
-            <div className="glass-card p-6">
+            <div className="glass-card p-4 md:p-6">
                 <div className="flex gap-3">
                     <input
                         type="url"
@@ -191,7 +191,7 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                     <button
                         onClick={handleExtract}
                         disabled={loading || !url}
-                        className="glass-btn px-6 py-3 bg-gleec-cyan/20 text-gleec-cyan border-gleec-cyan/50 hover:bg-gleec-cyan hover:text-black disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="glass-btn bg-gleec-cyan/20 text-gleec-cyan border-gleec-cyan/50 hover:bg-gleec-cyan hover:text-black disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                         {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
                         {t.extractBtn}
@@ -208,7 +208,7 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
 
             {/* Property Data Preview */}
             {propertyData && (
-                <div className="glass-card p-6 space-y-4">
+                <div className="glass-card p-4 md:p-6 space-y-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-xl font-bold text-white flex items-center gap-2">
                             <CheckCircle className="w-6 h-6 text-green-400" />
@@ -316,14 +316,14 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                     <button
                         onClick={handleGeneratePDF}
                         disabled={loading}
-                        className="flex-1 glass-btn px-6 py-4 bg-brand-gold/20 text-brand-gold border-brand-gold/50 hover:bg-brand-gold hover:text-black font-bold text-lg disabled:opacity-50"
+                        className="flex-1 glass-btn bg-brand-gold/20 text-brand-gold border-brand-gold/50 hover:bg-brand-gold hover:text-black font-bold text-lg disabled:opacity-50"
                     >
                         {loading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : t.generateBtn}
                     </button>
                     {pdfBlob && (
                         <button
                             onClick={handleDownload}
-                            className="flex-1 glass-btn px-6 py-4 bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold text-lg flex items-center justify-center gap-2"
+                            className="flex-1 glass-btn bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold text-lg flex items-center justify-center gap-2"
                         >
                             <Download className="w-5 h-5" />
                             {t.downloadBtn}
@@ -357,7 +357,7 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                         <div className="flex gap-3">
                             <button
                                 onClick={() => setShowPdfPreview(false)}
-                                className="flex-1 glass-btn px-6 py-3 bg-white/10 text-white border-white/20 hover:bg-white/20"
+                                className="flex-1 glass-btn bg-white/10 text-white border-white/20 hover:bg-white/20"
                             >
                                 Close Preview
                             </button>
@@ -366,7 +366,7 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                                     handleDownload();
                                     setShowPdfPreview(false);
                                 }}
-                                className="flex-1 glass-btn px-6 py-3 bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold flex items-center justify-center gap-2"
+                                className="flex-1 glass-btn bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold flex items-center justify-center gap-2"
                             >
                                 <Download className="w-5 h-5" />
                                 {t.downloadBtn}

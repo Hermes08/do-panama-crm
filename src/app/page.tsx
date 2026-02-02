@@ -238,7 +238,7 @@ export default function Home() {
     };
 
     return (
-        <div className="min-h-screen p-8 flex flex-col gap-8 max-w-7xl mx-auto">
+        <div className="min-h-screen p-4 md:p-8 flex flex-col gap-4 md:gap-8 max-w-7xl mx-auto">
             {/* Header */}
             <header className="glass-card p-4 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden group">
                 <div className="relative z-10">

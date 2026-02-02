@@ -43,7 +43,7 @@ body {
   }
 
   .glass-btn {
-    @apply backdrop-blur-md bg-brand-gold/90 text-brand-navy font-bold rounded-lg px-6 py-3 uppercase tracking-wider hover:bg-brand-goldHover hover:scale-105 transition-all duration-300 border border-brand-gold/50 shadow-md;
+    @apply backdrop-blur-md bg-brand-gold/90 text-brand-navy font-bold rounded-lg px-4 py-2 md:px-6 md:py-3 uppercase tracking-wider hover:bg-brand-goldHover hover:scale-105 transition-all duration-300 border border-brand-gold/50 shadow-md;
   }
 
   .glass-btn:hover {
@@ -51,11 +51,11 @@ body {
   }
 
   .glass-btn-secondary {
-    @apply backdrop-blur-md bg-white/10 text-white font-semibold rounded-lg px-6 py-3 hover:bg-white/20 transition-all duration-300 border border-white/20;
+    @apply backdrop-blur-md bg-white/10 text-white font-semibold rounded-lg px-4 py-2 md:px-6 md:py-3 hover:bg-white/20 transition-all duration-300 border border-white/20;
   }
 
   .glass-input {
-    @apply backdrop-blur-sm bg-black/20 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-brand-gold/50 focus:bg-black/30 placeholder-white/30 transition-all;
+    @apply backdrop-blur-sm bg-black/20 border border-white/10 rounded-lg px-3 py-2 md:px-4 md:py-2 text-white focus:outline-none focus:border-brand-gold/50 focus:bg-black/30 placeholder-white/30 transition-all;
   }
 
   /* Gleec-Style Animated Background */
