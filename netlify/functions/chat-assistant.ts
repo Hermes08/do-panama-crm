@@ -22,13 +22,6 @@ export const handler: Handler = async (event) => {
             body: JSON.stringify({ error: "Missing OPENAI_API_KEY environment variable." })
         };
     }
-    const { messages, lang = 'es' } = JSON.parse(event.body || '{}');
-
-    // 1. Fetch CRM Data for Context
-    const { data: clients, error: fetchError } = await supabase
-        .from('crm_clients')
-        .select('*');
-
     if (fetchError) throw fetchError;
 
     // 2. Prepare Context Summary (keep it under a reasonable token limit)
