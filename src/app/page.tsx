@@ -101,20 +101,59 @@ export default function Home() {
         }
     };
 
-    const handleSendMessage = () => {
+    const handleSendMessage = async () => {
         if (!chatMessage.trim()) return;
 
         const newHistory = [...chatHistory, { role: 'user' as const, content: chatMessage }];
         setChatHistory(newHistory);
+        const userMsg = chatMessage.toLowerCase();
         setChatMessage("");
 
-        // Simulate AI response for now
-        setTimeout(() => {
+        // Simulated AI Logic (in lieu of real LLM backend)
+        setTimeout(async () => {
+            let aiResponse = "";
+
+            // 1. Analysis: Find missing data
+            if (userMsg.includes("faltan") || userMsg.includes("missing") || userMsg.includes("vacío") || userMsg.includes("empty")) {
+                const missingInfoClients = clientsData.filter(c => !c.budget || !c.next_action_date || !c.estimated_travel_date).slice(0, 5);
+
+                if (missingInfoClients.length > 0) {
+                    aiResponse = lang === 'es'
+                        ? `Encontré ${missingInfoClients.length} clientes con datos importantes faltantes (Presupuesto o Fechas). Aquí tienes algunos:\n` + missingInfoClients.map(c => `• ${c.full_name}`).join("\n")
+                        : `I found ${missingInfoClients.length} clients with missing key data (Budget or Dates). Here are a few:\n` + missingInfoClients.map(c => `• ${c.full_name}`).join("\n");
+                } else {
+                    aiResponse = lang === 'es' ? "¡Todo parece estar en orden! No encontré clientes con datos críticos faltantes." : "Everything looks good! I didn't find any clients with critical missing data.";
+                }
+            }
+            // 2. Update: Update status (simple keyword match)
+            else if ((userMsg.includes("actualiza") || userMsg.includes("update")) && (userMsg.includes("hot") || userMsg.includes("caliente"))) {
+                // Try to find client name in message
+                const targetClient = clientsData.find(c => userMsg.toLowerCase().includes(c.full_name.toLowerCase()));
+                if (targetClient) {
+                    // Perform update
+                    const { error } = await supabase.from('crm_clients').update({ tag: '🔥 Hot' }).eq('id', targetClient.id);
+                    if (!error) {
+                        setClientsData(prev => prev.map(c => c.id === targetClient.id ? { ...c, tag: '🔥 Hot' } : c));
+                        aiResponse = lang === 'es' ? `✅ He actualizado a **${targetClient.full_name}** como "Hot Lead".` : `✅ I've updated **${targetClient.full_name}** to "Hot Lead".`;
+                    } else {
+                        aiResponse = "Error updating database.";
+                    }
+                } else {
+                    aiResponse = lang === 'es' ? "No entendí a qué cliente te refieres. Intenta mencionar el nombre exacto." : "I didn't catch the client's name. Try mentioning the exact name.";
+                }
+            }
+            // Default
+            else {
+                aiResponse = lang === 'es'
+                    ? "Puedo ayudarte a encontrar clientes con datos faltantes (escribe 'qué falta') o actualizar clientes a Hot (escribe 'actualiza a [Nombre] a Hot')."
+                    : "I can help you find clients with missing data (type 'what is missing') or update clients to Hot (type 'update [Name] to Hot').";
+            }
+
             setChatHistory(prev => [...prev, {
                 role: 'ai',
-                content: lang === 'en' ? "I'm analyzing your request... (AI integration coming soon)" : "Analizando tu solicitud... (Integración AI pronto)"
+                content: aiResponse
             }]);
-        }, 1000);
+        }, 600);
     };
 
     return (
@@ -151,6 +190,7 @@ export default function Home() {
                 {[
                     { id: 'dashboard', label: t.tabs.dashboard },
                     { id: 'clientes', label: t.tabs.clientes },
+                    { id: 'calendar', label: t.tabs.calendar },
                     { id: 'chat', label: t.tabs.chat }
                 ].map((tab) => (
                     <button
@@ -199,7 +239,7 @@ export default function Home() {
                                 value={chatMessage}
                                 onChange={(e) => setChatMessage(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                                placeholder={lang === 'en' ? "Ask about a client, property, or legal process..." : "Pregunta sobre un cliente, propiedad o trámite legal..."}
+                                placeholder={lang === 'en' ? "Ask (e.g. 'Update Tom to Hot', 'Who travels in Feb?')..." : "Pregunta (ej. 'Pon a Tom en Hot', '¿Quién viaja en Feb?')..."}
                                 className="w-full bg-black/20 border border-white/10 rounded-xl py-4 pl-6 pr-14 text-white placeholder:text-white/30 focus:outline-none focus:border-brand-gold/50 transition-colors"
                             />
                             <button
@@ -211,9 +251,33 @@ export default function Home() {
                         </div>
                     </div>
                 </div>
+            ) : activeTab === 'calendar' ? (
+                <div className="glass-card p-8 min-h-[500px]">
+                    <h2 className="font-heading text-2xl font-bold mb-6">{t.labels.dates}</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {/* Upcoming Months Logic (Mock for now, real sorting later) */}
+                        {['February 2026', 'March 2026', 'April 2026'].map(month => (
+                            <div key={month} className="bg-white/5 rounded-xl border border-white/5 p-4">
+                                <h3 className="text-lg font-bold text-brand-gold mb-3">{month}</h3>
+                                <div className="space-y-3">
+                                    {clientsData.filter(c => c.estimated_travel_date?.includes(month.split(' ')[0]) || c.next_action_date?.includes('2026-02') /* Rough filter for demo */).slice(0, 3).map(c => (
+                                        <div key={c.id} onClick={() => setSelectedClient(c)} className="p-3 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer transition-colors">
+                                            <p className="font-bold text-sm">{c.full_name}</p>
+                                            <div className="flex justify-between text-xs text-white/50 mt-1">
+                                                <span>{c.next_action}</span>
+                                                <span className="text-blue-300">{c.estimated_travel_date}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {clientsData.filter(c => c.estimated_travel_date?.includes(month.split(' ')[0])).length === 0 && <p className="text-xs text-white/30 italic">No events</p>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             ) : (
                 <>
-                    {/* Stats Grid - Always visible on Dashboard, optional on Clients? Let's keep on Dashboard only or both? Logic says Dashboard. */}
+                    {/* Stats Grid */}
                     {activeTab === 'dashboard' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                             {[
@@ -260,39 +324,47 @@ export default function Home() {
                         </div>
 
                         <div className="grid gap-4">
-                            {filteredClients.slice(0, activeTab === 'dashboard' ? 5 : undefined).map((client) => (
-                                <div
-                                    key={client.id}
-                                    onClick={() => setSelectedClient(client)}
-                                    className="glass-card p-6 hover:bg-white/10 transition-all cursor-pointer border border-white/5 hover:border-brand-gold/30 group"
-                                >
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <div className="flex items-center gap-3 mb-2">
-                                                <h3 className="text-xl font-bold">{client.full_name}</h3>
-                                                {client.tag && (
-                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${client.tag.includes("Hot") ? "bg-brand-gold text-brand-navy animate-pulse" : "bg-white/10"
-                                                        }`}>
-                                                        {client.tag}
+                            {filteredClients.slice(0, activeTab === 'dashboard' ? 5 : undefined).map((client) => {
+                                // Translation helper
+                                // @ts-ignore
+                                const translatedStatus = t.status[client.status?.trim()] || client.status;
+                                // @ts-ignore
+                                const translatedTag = t.tags[client.tag?.replace(/^[^\w]+/, '').trim()] || client.tag;
+
+                                return (
+                                    <div
+                                        key={client.id}
+                                        onClick={() => setSelectedClient(client)}
+                                        className="glass-card p-6 hover:bg-white/10 transition-all cursor-pointer border border-white/5 hover:border-brand-gold/30 group"
+                                    >
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <h3 className="text-xl font-bold">{client.full_name}</h3>
+                                                    {client.tag && (
+                                                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${client.tag.includes("Hot") ? "bg-brand-gold text-brand-navy animate-pulse" : "bg-white/10"
+                                                            }`}>
+                                                            {translatedTag}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-wrap gap-4 text-sm text-white/70">
+                                                    {client.zone_project && <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-brand-gold" /> {client.zone_project}</span>}
+                                                    {client.interest_category && <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 text-blue-400" /> {client.interest_category}</span>}
+                                                    <span className={`${client.status?.includes("No") ? "text-red-300" : "text-green-300"} flex items-center gap-1`}>
+                                                        {translatedStatus}
                                                     </span>
-                                                )}
+                                                </div>
                                             </div>
-                                            <div className="flex flex-wrap gap-4 text-sm text-white/70">
-                                                {client.zone_project && <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-brand-gold" /> {client.zone_project}</span>}
-                                                {client.interest_category && <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 text-blue-400" /> {client.interest_category}</span>}
-                                                <span className={`${client.status?.includes("No") ? "text-red-300" : "text-green-300"} flex items-center gap-1`}>
-                                                    {client.status}
-                                                </span>
+                                            <div className="opacity-0 group-hover:opacity-100 transition-opacity self-center">
+                                                <button className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded-lg flex items-center gap-1">
+                                                    {t.buttons.details} &rarr;
+                                                </button>
                                             </div>
-                                        </div>
-                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity self-center">
-                                            <button className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded-lg flex items-center gap-1">
-                                                {t.buttons.details} &rarr;
-                                            </button>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                )
+                            })}
 
                             {filteredClients.length === 0 && (
                                 <div className="text-center py-20 text-white/50">
@@ -318,6 +390,7 @@ export default function Home() {
                 isOpen={!!selectedClient}
                 onClose={() => setSelectedClient(null)}
                 client={selectedClient}
+                lang={lang}
                 onClientUpdated={(updatedClient) => {
                     setClientsData(prev => prev.map(c => c.id === updatedClient.id ? updatedClient : c));
                     setSelectedClient(updatedClient); // Keep modal open with updated data

@@ -10,9 +10,10 @@ interface LeadDetailsModalProps {
     onClose: () => void;
     client: Client | null;
     onClientUpdated: (updatedClient: Client) => void;
+    lang?: 'es' | 'en';
 }
 
-export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpdated }: LeadDetailsModalProps) {
+export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpdated, lang = 'es' }: LeadDetailsModalProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState<Partial<Client>>({});
     const [saving, setSaving] = useState(false);
@@ -297,8 +298,8 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                         onClick={isEditing ? handleSave : onClose}
                         disabled={saving}
                         className={`px-6 py-2 rounded-lg font-bold transition-colors ${isEditing
-                                ? 'bg-brand-gold text-brand-navy hover:bg-white'
-                                : 'bg-white text-brand-navy hover:bg-gray-200'
+                            ? 'bg-brand-gold text-brand-navy hover:bg-white'
+                            : 'bg-white text-brand-navy hover:bg-gray-200'
                             }`}
                     >
                         {isEditing ? (saving ? "Guardando..." : "Guardar Cambios") : "Cerrar"}

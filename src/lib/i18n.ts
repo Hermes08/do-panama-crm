@@ -6,7 +6,8 @@ export const translations = {
         tabs: {
             dashboard: "Dashboard",
             clientes: "Clientes",
-            chat: "Chat AI"
+            chat: "Chat AI",
+            calendar: "Calendario"
         },
         stats: {
             total: "Total",
@@ -29,7 +30,36 @@ export const translations = {
             lastContact: "Último Contacto",
             nextAction: "Próxima Acción",
             travel: "Viaje Estimado",
-            history: "Historial y Notas"
+            history: "Historial y Notas",
+            edit: "Editar",
+            save: "Guardar",
+            cancel: "Cancelar",
+            tag: "Etiqueta"
+        },
+        status: {
+            " En seguimiento": "En seguimiento",
+            " Pendiente respuesta": "Pendiente respuesta",
+            " No seguimiento": "No seguimiento",
+            "Cliente activo": "Cliente activo",
+            "Prospecto": "Prospecto",
+            "Cliente perdido": "Cliente perdido",
+            "Congelado": "Congelado",
+            "⚫ Congelado": "Congelado"
+        },
+        tags: {
+            "Hot": "Caliente",
+            " Hot": "Caliente",
+            "🔥 Hot": "Caliente",
+            "Mirando": "Mirando",
+            " Mirando": "Mirando",
+            "Frío": "Frío",
+            "流 Frío": "Frío",
+            "Sospechoso": "Sospechoso",
+            "⚠️ Sospechoso": "Sospechoso",
+            "Caótico": "Caótico",
+            "裡 Caótico": "Caótico",
+            "Dormido": "Dormido",
+            " Dormido": "Dormido"
         }
     },
     en: {
@@ -39,7 +69,8 @@ export const translations = {
         tabs: {
             dashboard: "Dashboard",
             clientes: "Clients",
-            chat: "AI Chat"
+            chat: "AI Chat",
+            calendar: "Calendar"
         },
         stats: {
             total: "Total",
@@ -62,7 +93,36 @@ export const translations = {
             lastContact: "Last Contact",
             nextAction: "Next Action",
             travel: "Est. Travel",
-            history: "History & Notes"
+            history: "History & Notes",
+            edit: "Edit",
+            save: "Save",
+            cancel: "Cancel",
+            tag: "Tag"
+        },
+        status: {
+            " En seguimiento": "Follow Up",
+            " Pendiente respuesta": "Pending Reply",
+            " No seguimiento": "No Follow Up",
+            "Cliente activo": "Active Client",
+            "Prospecto": "Prospect",
+            "Cliente perdido": "Lost Client",
+            "Congelado": "Frozen",
+            "⚫ Congelado": "Frozen"
+        },
+        tags: {
+            "Hot": "Hot",
+            " Hot": "Hot",
+            "🔥 Hot": "Hot",
+            "Mirando": "Looking",
+            " Mirando": "Looking",
+            "Frío": "Cold",
+            "流 Frío": "Cold",
+            "Sospechoso": "Suspicious",
+            "⚠️ Sospechoso": "Suspicious",
+            "Caótico": "Chaotic",
+            "裡 Caótico": "Chaotic",
+            "Dormido": "Sleeping",
+            " Dormido": "Sleeping"
         }
     }
 };

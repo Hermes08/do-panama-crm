@@ -1,0 +1,11 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  # We cannot set secrets here, but we can set non-secret configs
+  NEXT_PUBLIC_SUPABASE_URL = "https://oypunkzyxrdmwjqwguio.supabase.co"
+  # Keys must be set in the UI to avoid committing them, or the scanner will block them if seen here.
