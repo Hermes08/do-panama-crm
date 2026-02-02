@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Search, User, Zap, AlertTriangle, Snowflake, HelpCircle, Briefcase, X, Send, Bot, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient"; // Use the client we set up
-import { Client } from "@/types";
+import { Client } from "../types";
 import LeadDetailsModal from "@/components/LeadDetailsModal";
 import { translations } from "@/lib/i18n";
 
