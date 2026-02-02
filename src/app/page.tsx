@@ -240,34 +240,34 @@ export default function Home() {
     return (
         <div className="min-h-screen p-8 flex flex-col gap-8 max-w-7xl mx-auto">
             {/* Header */}
-            <header className="glass-card p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden group">
+            <header className="glass-card p-4 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden group">
                 <div className="relative z-10">
-                    <h1 className="font-heading text-4xl font-bold text-white mb-2 tracking-tight">
+                    <h1 className="font-heading text-3xl md:text-4xl font-bold text-white mb-2 tracking-tight">
                         🏢 {t.title} <span className="text-brand-gold italic">Pro</span>
                     </h1>
-                    <p className="text-brand-light/80 font-light">
+                    <p className="text-brand-light/80 font-light text-sm md:text-base">
                         {t.subtitle} • {stats.total} {lang === 'es' ? 'Clientes' : 'Clients'}
                     </p>
                 </div>
 
-                <div className="flex gap-4 relative z-10">
+                <div className="flex flex-wrap gap-3 md:gap-4 relative z-10 w-full md:w-auto">
                     <button
                         onClick={() => setLang(l => l === 'es' ? 'en' : 'es')}
-                        className="glass-btn px-4 font-mono text-sm"
+                        className="glass-btn px-4 font-mono text-sm py-2 flex-1 md:flex-none"
                     >
                         {lang.toUpperCase()}
                     </button>
                     <button
                         onClick={() => setIsCreatingClient(true)}
-                        className="glass-btn flex items-center gap-2 bg-brand-gold/20 text-brand-gold border-brand-gold/50 hover:bg-brand-gold hover:text-brand-navy"
+                        className="glass-btn flex items-center justify-center gap-2 bg-brand-gold/20 text-brand-gold border-brand-gold/50 hover:bg-brand-gold hover:text-brand-navy py-2 flex-1 md:flex-none"
                     >
-                        <span>+</span> {lang === 'es' ? 'Nuevo' : 'New'}
+                        <span className="text-lg font-bold">+</span> {lang === 'es' ? 'Nuevo' : 'New'}
                     </button>
                     <button
                         onClick={handleDownload}
-                        className="glass-btn flex items-center gap-2"
+                        className="glass-btn flex items-center justify-center gap-2 py-2 flex-1 md:flex-none"
                     >
-                        <span>📥</span> {t.buttons.download}
+                        <span>📥</span> <span className="hidden sm:inline">{t.buttons.download}</span><span className="sm:hidden">{lang === 'es' ? 'Exp' : 'Exp'}</span>
                     </button>
                 </div>
 
@@ -275,34 +275,33 @@ export default function Home() {
                 <div className="absolute top-0 right-0 w-64 h-64 bg-brand-gold/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 group-hover:bg-brand-gold/20 transition-all duration-700"></div>
             </header>
 
-            {/* Tabs */}
-            <div className="flex gap-4 items-center flex-wrap">
+            {/* Tabs - Scrollable on mobile */}
+            <div className="flex gap-2 min-w-full overflow-x-auto pb-2 scrollbar-hide md:flex-wrap md:gap-4 md:overflow-visible">
                 {[
                     { id: 'dashboard', label: t.tabs.dashboard },
                     { id: 'clientes', label: t.tabs.clientes },
                     { id: 'calendar', label: t.tabs.calendar },
                     { id: 'chat', label: t.tabs.chat },
-                    { id: 'propiedades', label: t.tabs.propiedades } // Added new tab
+                    { id: 'propiedades', label: t.tabs.propiedades }
                 ].map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => { setActiveTab(tab.id); if (tab.id !== 'clientes') setStatusFilter(null); }}
-                        className={`px-6 py-3 rounded-xl font-heading font-semibold transition-all duration-300 ${activeTab === tab.id
-                            ? 'bg-white text-brand-navy shadow-[0_0_20px_rgba(255,255,255,0.3)] scale-105'
+                        className={`px-4 md:px-6 py-2 md:py-3 rounded-xl font-heading font-semibold transition-all duration-300 whitespace-nowrap text-sm md:text-base ${activeTab === tab.id
+                            ? 'bg-white text-brand-navy shadow-[0_0_20px_rgba(255,255,255,0.3)]'
                             : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
                             }`}
                     >
                         {tab.label}
                     </button>
                 ))}
-
-                {statusFilter && activeTab === 'clientes' && (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-brand-gold/20 text-brand-gold rounded-lg border border-brand-gold/30 animate-in fade-in slide-in-from-left-4">
-                        <span className="text-sm font-bold">Filter: {statusFilter.toUpperCase()}</span>
-                        <button onClick={() => setStatusFilter(null)} className="hover:text-white"><X className="w-4 h-4" /></button>
-                    </div>
-                )}
             </div>
+            {statusFilter && activeTab === 'clientes' && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-brand-gold/20 text-brand-gold rounded-lg border border-brand-gold/30 animate-in fade-in slide-in-from-left-4">
+                    <span className="text-sm font-bold">Filter: {statusFilter.toUpperCase()}</span>
+                    <button onClick={() => setStatusFilter(null)} className="hover:text-white"><X className="w-4 h-4" /></button>
+                </div>
+            )}
 
             {/* Content Based on Tab */}
             {activeTab === 'chat' ? (
@@ -396,7 +395,7 @@ export default function Home() {
                 <>
                     {/* Stats Grid */}
                     {activeTab === 'dashboard' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-6">
                             {[
                                 { label: t.stats.total, value: stats.total, icon: User, type: null },
                                 { label: t.stats.hot, value: stats.hot, icon: Zap, color: "text-brand-gold", type: "hot" },
@@ -411,11 +410,11 @@ export default function Home() {
                                         ${statusFilter === stat.type ? 'bg-white/10 border-brand-gold/50 scale-105 shadow-xl' : 'hover:bg-white/10 border-transparent'}
                                     `}
                                 >
-                                    <div>
-                                        <p className="text-xs uppercase tracking-wider text-white/50 mb-1">{stat.label}</p>
-                                        <p className={`text-4xl font-bold ${stat.color || 'text-white'}`}>{stat.value}</p>
+                                    <div className="flex flex-col">
+                                        <span className="text-white/40 text-[10px] md:text-xs font-medium uppercase tracking-wider mb-1">{stat.label}</span>
+                                        <span className={`text-2xl md:text-3xl font-bold ${stat.color || 'text-white'}`}>{stat.value}</span>
                                     </div>
-                                    <stat.icon className={`w-8 h-8 opacity-50 group-hover:opacity-100 transition-opacity ${stat.color || 'text-white'}`} />
+                                    <stat.icon className={`w-6 h-6 md:w-8 md:h-8 opacity-50 group-hover:opacity-100 transition-opacity ${stat.color || 'text-white'}`} />
                                 </div>
                             ))}
                         </div>
@@ -428,9 +427,9 @@ export default function Home() {
 
                     {/* Main Content Area (Client List) */}
                     {(activeTab === 'dashboard' || activeTab === 'clientes') && (
-                        <div className="glass-card p-8 min-h-[500px]">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-                                <h2 className="font-heading text-2xl font-bold">
+                        <div className="glass-card p-4 md:p-8 min-h-[500px]">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 md:mb-8">
+                                <h2 className="font-heading text-xl md:text-2xl font-bold">
                                     {activeTab === 'dashboard'
                                         ? (lang === 'es' ? '🔥 Clientes Prioritarios' : '🔥 Priority Clients')
                                         : (lang === 'es' ? '📋 Lista de Clientes' : '📋 Client List')}
@@ -459,20 +458,20 @@ export default function Home() {
                                         <div
                                             key={client.id}
                                             onClick={() => setSelectedClient(client)}
-                                            className="glass-card p-6 hover:bg-white/10 transition-all cursor-pointer border border-white/5 hover:border-brand-gold/30 group"
+                                            className="glass-card p-4 md:p-6 hover:bg-white/10 transition-all cursor-pointer border border-white/5 hover:border-brand-gold/30 group"
                                         >
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <div className="flex items-center gap-3 mb-2">
-                                                        <h3 className="text-xl font-bold">{client.full_name}</h3>
+                                            <div className="flex justify-between items-start gap-4">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center flex-wrap gap-2 md:gap-3 mb-2">
+                                                        <h3 className="text-lg md:text-xl font-bold truncate">{client.full_name}</h3>
                                                         {client.tag && (
-                                                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${client.tag.includes("Hot") ? "bg-brand-gold text-brand-navy animate-pulse" : "bg-white/10"
+                                                            <span className={`px-2 py-0.5 md:px-3 md:py-1 rounded-full text-[10px] md:text-xs font-bold ${client.tag.includes("Hot") ? "bg-brand-gold text-brand-navy animate-pulse" : "bg-white/10"
                                                                 }`}>
                                                                 {translatedTag}
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className="flex flex-wrap gap-4 text-sm text-white/70">
+                                                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs md:text-sm text-white/70">
                                                         {client.zone_project && <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-brand-gold" /> {client.zone_project}</span>}
                                                         {client.interest_category && <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 text-blue-400" /> {client.interest_category}</span>}
                                                         <span className={`${client.status?.includes("No") ? "text-red-300" : "text-green-300"} flex items-center gap-1`}>
