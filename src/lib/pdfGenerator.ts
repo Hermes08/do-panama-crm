@@ -50,7 +50,7 @@ export async function generatePropertyPDF(
     };
 
     // ========== SLIDE 1: TITLE SLIDE ==========
-    doc.setFillColor(...colors.light);
+    doc.setFillColor(248, 250, 252);
     doc.rect(0, 0, W, H, "F");
 
     // Hero image if available
@@ -73,27 +73,27 @@ export async function generatePropertyPDF(
     const titleBoxY = H * 0.5;
     const titleBoxH = 50;
 
-    doc.setFillColor(...colors.white);
+    doc.setFillColor(255, 255, 255);
     doc.roundedRect(margin * 2, titleBoxY, W - margin * 4, titleBoxH, 3, 3, "F");
-    doc.setDrawColor(...colors.primary);
+    doc.setDrawColor(0, 150, 136);
     doc.setLineWidth(0.5);
     doc.roundedRect(margin * 2, titleBoxY, W - margin * 4, titleBoxH, 3, 3, "S");
 
     // Property title
     doc.setFont("helvetica", "bold");
     doc.setFontSize(24);
-    doc.setTextColor(...colors.dark);
+    doc.setTextColor(30, 41, 59);
     const titleLines = doc.splitTextToSize(propertyData.title, W - margin * 6);
     doc.text(titleLines[0], W / 2, titleBoxY + 15, { align: "center" });
 
     // Price (prominent)
     doc.setFontSize(28);
-    doc.setTextColor(...colors.primary);
+    doc.setTextColor(0, 150, 136);
     doc.text(propertyData.price, W / 2, titleBoxY + 32, { align: "center" });
 
     // Location
     doc.setFontSize(12);
-    doc.setTextColor(...colors.dark);
+    doc.setTextColor(30, 41, 59);
     doc.setFont("helvetica", "normal");
     doc.text("📍 " + propertyData.location, W / 2, titleBoxY + 44, { align: "center" });
 
@@ -105,15 +105,15 @@ export async function generatePropertyPDF(
 
     // ========== SLIDE 2: KEY DETAILS ==========
     doc.addPage();
-    doc.setFillColor(...colors.light);
+    doc.setFillColor(248, 250, 252);
     doc.rect(0, 0, W, H, "F");
 
     // Slide title
-    doc.setFillColor(...colors.primary);
+    doc.setFillColor(0, 150, 136);
     doc.rect(0, 0, W, 25, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(20);
-    doc.setTextColor(...colors.white);
+    doc.setTextColor(255, 255, 255);
     doc.text("PROPERTY DETAILS", margin, 16);
 
     let y = 45;
@@ -126,9 +126,9 @@ export async function generatePropertyPDF(
     const drawStatCard = (x: number, icon: string, label: string, value: string) => {
         if (!value) return;
 
-        doc.setFillColor(...colors.white);
+        doc.setFillColor(255, 255, 255);
         doc.roundedRect(x, cardY, cardW, cardH, 2, 2, "F");
-        doc.setDrawColor(...colors.secondary);
+        doc.setDrawColor(0, 188, 212);
         doc.setLineWidth(0.3);
         doc.roundedRect(x, cardY, cardW, cardH, 2, 2, "S");
 
@@ -137,12 +137,12 @@ export async function generatePropertyPDF(
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
-        doc.setTextColor(...colors.primary);
+        doc.setTextColor(0, 150, 136);
         doc.text(value, x + cardW / 2, cardY + 22, { align: "center" });
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
-        doc.setTextColor(...colors.dark);
+        doc.setTextColor(30, 41, 59);
         doc.text(label, x + cardW / 2, cardY + 30, { align: "center" });
     };
 
@@ -155,21 +155,21 @@ export async function generatePropertyPDF(
     // Description box
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.setTextColor(...colors.primary);
+    doc.setTextColor(0, 150, 136);
     doc.text("DESCRIPTION", margin, y);
     y += 10;
 
-    doc.setFillColor(...colors.white);
+    doc.setFillColor(255, 255, 255);
     const descLines = doc.splitTextToSize(propertyData.description, W - margin * 2 - 20);
     const descH = Math.min(descLines.length * 5 + 15, 50);
     doc.roundedRect(margin, y, W - margin * 2, descH, 2, 2, "F");
-    doc.setDrawColor(...colors.secondary);
+    doc.setDrawColor(0, 188, 212);
     doc.setLineWidth(0.2);
     doc.roundedRect(margin, y, W - margin * 2, descH, 2, 2, "S");
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.setTextColor(...colors.dark);
+    doc.setTextColor(30, 41, 59);
     doc.text(descLines.slice(0, 8), margin + 10, y + 8);
 
     // Footer
@@ -181,15 +181,15 @@ export async function generatePropertyPDF(
     // ========== SLIDE 3: FEATURES ==========
     if (propertyData.features.length > 0) {
         doc.addPage();
-        doc.setFillColor(...colors.light);
+        doc.setFillColor(248, 250, 252);
         doc.rect(0, 0, W, H, "F");
 
         // Slide title
-        doc.setFillColor(...colors.primary);
+        doc.setFillColor(0, 150, 136);
         doc.rect(0, 0, W, 25, "F");
         doc.setFont("helvetica", "bold");
         doc.setFontSize(20);
-        doc.setTextColor(...colors.white);
+        doc.setTextColor(255, 255, 255);
         doc.text("KEY FEATURES & AMENITIES", margin, 16);
 
         y = 45;
@@ -209,9 +209,9 @@ export async function generatePropertyPDF(
             const x = margin + col * (colW + 10);
             const fy = y + row * 12;
 
-            doc.setTextColor(...colors.primary);
+            doc.setTextColor(0, 150, 136);
             doc.text("●", x, fy);
-            doc.setTextColor(...colors.dark);
+            doc.setTextColor(30, 41, 59);
             doc.text(feature.substring(0, 35), x + 6, fy);
         });
 
@@ -225,15 +225,15 @@ export async function generatePropertyPDF(
     // ========== SLIDE 4+: PHOTO GALLERY ==========
     if (customImages.length > 1) {
         doc.addPage();
-        doc.setFillColor(...colors.light);
+        doc.setFillColor(248, 250, 252);
         doc.rect(0, 0, W, H, "F");
 
         // Slide title
-        doc.setFillColor(...colors.primary);
+        doc.setFillColor(0, 150, 136);
         doc.rect(0, 0, W, 25, "F");
         doc.setFont("helvetica", "bold");
         doc.setFontSize(20);
-        doc.setTextColor(...colors.white);
+        doc.setTextColor(255, 255, 255);
         doc.text("PROPERTY GALLERY", margin, 16);
 
         // 2x2 grid of images
@@ -247,7 +247,7 @@ export async function generatePropertyPDF(
             try {
                 const imgData = await loadImageAsDataURL(customImages[i]);
                 doc.addImage(imgData, "JPEG", imgX, imgY, imgW, imgH, undefined, "FAST");
-                doc.setDrawColor(...colors.secondary);
+                doc.setDrawColor(0, 188, 212);
                 doc.setLineWidth(0.5);
                 doc.roundedRect(imgX, imgY, imgW, imgH, 2, 2, "S");
 
@@ -262,14 +262,14 @@ export async function generatePropertyPDF(
                 if (imgCount % 4 === 0 && i < customImages.length - 1) {
                     // New page for more images
                     doc.addPage();
-                    doc.setFillColor(...colors.light);
+                    doc.setFillColor(248, 250, 252);
                     doc.rect(0, 0, W, H, "F");
 
-                    doc.setFillColor(...colors.primary);
+                    doc.setFillColor(0, 150, 136);
                     doc.rect(0, 0, W, 25, "F");
                     doc.setFont("helvetica", "bold");
                     doc.setFontSize(20);
-                    doc.setTextColor(...colors.white);
+                    doc.setTextColor(255, 255, 255);
                     doc.text("PROPERTY GALLERY (CONTINUED)", margin, 16);
 
                     imgX = margin;
