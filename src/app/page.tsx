@@ -203,7 +203,10 @@ export default function Home() {
                 })
             });
 
-            if (!response.ok) throw new Error("API Error");
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || "API Error");
+            }
 
             const data = await response.json();
 
@@ -218,10 +221,10 @@ export default function Home() {
                 if (updatedClients) setClientsData(updatedClients as Client[]);
             }
 
-        } catch (err) {
+        } catch (err: any) {
             setChatHistory(prev => [...prev, {
                 role: 'ai',
-                content: lang === 'es' ? "Lo siento, hubo un problema conectando con mi cerebro. Revisa tu OPENAI_API_KEY." : "Sorry, I had trouble connecting to my brain. Please check your OPENAI_API_KEY."
+                content: (lang === 'es' ? "Error: " : "Error: ") + (err.message || (lang === 'es' ? "Error desconocido" : "Unknown error"))
             }]);
         } finally {
             setIsThinking(false);
