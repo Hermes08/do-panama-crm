@@ -194,11 +194,17 @@ export default function Home() {
         setIsThinking(true);
 
         try {
+            // Map roles 'ai' -> 'assistant' for OpenAI API compatibility
+            const apiMessages = newHistory.map(m => ({
+                role: m.role === 'ai' ? 'assistant' : m.role,
+                content: m.content
+            }));
+
             const response = await fetch("/.netlify/functions/chat-assistant", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    messages: newHistory,
+                    messages: apiMessages,
                     lang: lang
                 })
             });
