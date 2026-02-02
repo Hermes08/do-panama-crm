@@ -105,26 +105,81 @@ export default function Home() {
         }
     };
 
-    // Proactive AI Suggestions
+    // Proactive AI Suggestions (Smarter Logic)
     useEffect(() => {
-        if (activeTab === 'chat' && chatHistory.length === 1) { // Only if just opened and empty
-            const missing = clientsData.filter(c => !c.budget || !c.next_action_date).length;
-            const currentMonth = "2026-02"; // Mock current month
-            const upcomingTravel = clientsData.filter(c => c.estimated_travel_date?.startsWith(currentMonth)).length;
-            const upcomingActions = clientsData.filter(c => c.next_action_date?.startsWith(currentMonth)).length;
+        if (activeTab === 'chat' && chatHistory.length === 1 && clientsData.length > 0) {
+            // Logic 1: Find clients with "Low Data" (missing > 2 key fields)
+            const lowDataClients = clientsData.filter(c => {
+                let missingCount = 0;
+                if (!c.budget) missingCount++;
+                if (!c.email && !c.phone) missingCount++;
+                if (!c.interest_category) missingCount++;
+                return missingCount >= 2;
+            }).slice(0, 3);
+
+            // Logic 2: Untouched Clients (Last contact > 7 days or null)
+            const today = new Date();
+            const untouchedClients = clientsData.filter(c => {
+                if (!c.last_contact_date) return true;
+                const last = new Date(c.last_contact_date);
+                const diffTime = Math.abs(today.getTime() - last.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays > 7;
+            }).slice(0, 3);
+
+            // Logic 3: Upcoming Calendar (Real check)
+            const currentMonthKey = "2026-02"; // dynamic in real app: new Date().toISOString().slice(0, 7)
+            const upcomingTravel = clientsData.filter(c => c.estimated_travel_date?.startsWith(currentMonthKey)).length;
 
             let proactiveMsg = "";
             if (lang === 'es') {
-                proactiveMsg = `👋 ¡Hola! He revisado tu CRM automáticamente.\n\n• **${missing}** clientes tienen datos faltantes.\n• **${upcomingTravel}** clientes viajan este mes (${currentMonth}).\n• **${upcomingActions}** acciones pendientes para este mes.\n\n¿Quieres que detalle alguno de estos grupos?`;
+                proactiveMsg = `👋 **Análisis Semanal:**\n\n`;
+                if (upcomingTravel > 0) proactiveMsg += `• 📅 Tienes **${upcomingTravel}** visitas programadas para ${currentMonthKey}.\n`;
+                if (lowDataClients.length > 0) proactiveMsg += `• ⚠️ **Falta Información:** ${lowDataClients.map(c => c.full_name).join(", ")} tienen pocos datos.\n`;
+                if (untouchedClients.length > 0) proactiveMsg += `• 🕰️ **Sin Contacto:** No has hablado con ${untouchedClients.map(c => c.full_name).join(", ")} recientemente.\n`;
+                proactiveMsg += `\n¿Por dónde quieres empezar?`;
             } else {
-                proactiveMsg = `👋 Hi! I automatically reviewed your CRM.\n\n• **${missing}** clients have missing data.\n• **${upcomingTravel}** clients are traveling this month (${currentMonth}).\n• **${upcomingActions}** pending actions for this month.\n\nWant me to detail any of these groups?`;
+                proactiveMsg = `👋 **Weekly Analysis:**\n\n`;
+                if (upcomingTravel > 0) proactiveMsg += `• 📅 You have **${upcomingTravel}** visits scheduled for ${currentMonthKey}.\n`;
+                if (lowDataClients.length > 0) proactiveMsg += `• ⚠️ **Missing Info:** ${lowDataClients.map(c => c.full_name).join(", ")} need updates.\n`;
+                if (untouchedClients.length > 0) proactiveMsg += `• 🕰️ **No Contact:** You haven't spoken to ${untouchedClients.map(c => c.full_name).join(", ")} recently.\n`;
+                proactiveMsg += `\nWhere should we start?`;
             }
 
             setTimeout(() => {
                 setChatHistory(prev => [...prev, { role: 'ai', content: proactiveMsg }]);
-            }, 600);
+            }, 800);
         }
     }, [activeTab, clientsData, lang]);
+
+    const handleDownload = () => {
+        // Simple CSV Export
+        const headers = ["ID", "Name", "Status", "Tag", "Budget", "Next Action", "Date"];
+        const rows = clientsData.map(c => [
+            c.id,
+            `"${c.full_name}"`,
+            c.status,
+            c.tag,
+            c.budget || "0",
+            `"${c.next_action || ""}"`,
+            c.next_action_date || ""
+        ]);
+
+        const csvContent = [
+            headers.join(","),
+            ...rows.map(r => r.join(","))
+        ].join("\n");
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `crm_export_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const handleSendMessage = async () => {
         if (!chatMessage.trim()) return;
@@ -207,7 +262,10 @@ export default function Home() {
                     >
                         <span>+</span> {lang === 'es' ? 'Nuevo' : 'New'}
                     </button>
-                    <button className="glass-btn flex items-center gap-2">
+                    <button
+                        onClick={handleDownload}
+                        className="glass-btn flex items-center gap-2"
+                    >
                         <span>📥</span> {t.buttons.download}
                     </button>
                 </div>
