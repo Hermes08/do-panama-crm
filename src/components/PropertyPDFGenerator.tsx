@@ -94,6 +94,17 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
 
             const data = await response.json();
             setPropertyData(data);
+
+            // AUTO-TRANSLATE: Start translation immediately after extraction
+            setTranslating(true);
+            try {
+                const translated = await translatePropertyData(data);
+                setTranslatedData(translated);
+            } catch (err) {
+                console.error("Auto-translation failed:", err);
+            } finally {
+                setTranslating(false);
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Unknown error occurred");
         } finally {

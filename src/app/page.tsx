@@ -415,87 +415,91 @@ export default function Home() {
                     )}
 
                     {/* Advanced Charts Section */}
-                    <DashboardCharts clients={filteredClients} lang={lang} />
+                    {activeTab === 'dashboard' && (
+                        <DashboardCharts clients={filteredClients} lang={lang} />
+                    )}
 
-                    {/* Main Content Area */}
-                    <div className="glass-card p-8 min-h-[500px]">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-                            <h2 className="font-heading text-2xl font-bold">
-                                {activeTab === 'dashboard'
-                                    ? (lang === 'es' ? '🔥 Clientes Prioritarios' : '🔥 Priority Clients')
-                                    : (lang === 'es' ? '📋 Lista de Clientes' : '📋 Client List')}
-                            </h2>
-                            <div className="relative w-full sm:w-auto">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
-                                <input
-                                    type="text"
-                                    placeholder={t.searchPlaceholder}
-                                    className="glass-input pl-10 w-full sm:w-64"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
+                    {/* Main Content Area (Client List) */}
+                    {(activeTab === 'dashboard' || activeTab === 'clientes') && (
+                        <div className="glass-card p-8 min-h-[500px]">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+                                <h2 className="font-heading text-2xl font-bold">
+                                    {activeTab === 'dashboard'
+                                        ? (lang === 'es' ? '🔥 Clientes Prioritarios' : '🔥 Priority Clients')
+                                        : (lang === 'es' ? '📋 Lista de Clientes' : '📋 Client List')}
+                                </h2>
+                                <div className="relative w-full sm:w-auto">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
+                                    <input
+                                        type="text"
+                                        placeholder={t.searchPlaceholder}
+                                        className="glass-input pl-10 w-full sm:w-64"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="grid gap-4">
-                            {filteredClients.slice(0, activeTab === 'dashboard' ? 5 : undefined).map((client) => {
-                                // Translation helper
-                                // @ts-ignore
-                                const translatedStatus = t.status[client.status?.trim()] || client.status;
-                                // @ts-ignore
-                                const translatedTag = t.tags[client.tag?.replace(/^[^\w]+/, '').trim()] || client.tag;
+                            <div className="grid gap-4">
+                                {filteredClients.slice(0, activeTab === 'dashboard' ? 5 : undefined).map((client) => {
+                                    // Translation helper
+                                    // @ts-ignore
+                                    const translatedStatus = t.status[client.status?.trim()] || client.status;
+                                    // @ts-ignore
+                                    const translatedTag = t.tags[client.tag?.replace(/^[^\w]+/, '').trim()] || client.tag;
 
-                                return (
-                                    <div
-                                        key={client.id}
-                                        onClick={() => setSelectedClient(client)}
-                                        className="glass-card p-6 hover:bg-white/10 transition-all cursor-pointer border border-white/5 hover:border-brand-gold/30 group"
-                                    >
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <div className="flex items-center gap-3 mb-2">
-                                                    <h3 className="text-xl font-bold">{client.full_name}</h3>
-                                                    {client.tag && (
-                                                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${client.tag.includes("Hot") ? "bg-brand-gold text-brand-navy animate-pulse" : "bg-white/10"
-                                                            }`}>
-                                                            {translatedTag}
+                                    return (
+                                        <div
+                                            key={client.id}
+                                            onClick={() => setSelectedClient(client)}
+                                            className="glass-card p-6 hover:bg-white/10 transition-all cursor-pointer border border-white/5 hover:border-brand-gold/30 group"
+                                        >
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <h3 className="text-xl font-bold">{client.full_name}</h3>
+                                                        {client.tag && (
+                                                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${client.tag.includes("Hot") ? "bg-brand-gold text-brand-navy animate-pulse" : "bg-white/10"
+                                                                }`}>
+                                                                {translatedTag}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-4 text-sm text-white/70">
+                                                        {client.zone_project && <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-brand-gold" /> {client.zone_project}</span>}
+                                                        {client.interest_category && <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 text-blue-400" /> {client.interest_category}</span>}
+                                                        <span className={`${client.status?.includes("No") ? "text-red-300" : "text-green-300"} flex items-center gap-1`}>
+                                                            {translatedStatus}
                                                         </span>
-                                                    )}
+                                                    </div>
                                                 </div>
-                                                <div className="flex flex-wrap gap-4 text-sm text-white/70">
-                                                    {client.zone_project && <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-brand-gold" /> {client.zone_project}</span>}
-                                                    {client.interest_category && <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 text-blue-400" /> {client.interest_category}</span>}
-                                                    <span className={`${client.status?.includes("No") ? "text-red-300" : "text-green-300"} flex items-center gap-1`}>
-                                                        {translatedStatus}
-                                                    </span>
+                                                <div className="opacity-0 group-hover:opacity-100 transition-opacity self-center">
+                                                    <button className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded-lg flex items-center gap-1">
+                                                        {t.buttons.details} &rarr;
+                                                    </button>
                                                 </div>
-                                            </div>
-                                            <div className="opacity-0 group-hover:opacity-100 transition-opacity self-center">
-                                                <button className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded-lg flex items-center gap-1">
-                                                    {t.buttons.details} &rarr;
-                                                </button>
                                             </div>
                                         </div>
+                                    )
+                                })}
+
+                                {filteredClients.length === 0 && (
+                                    <div className="text-center py-20 text-white/50">
+                                        {lang === 'es' ? 'No hay resultados' : 'No results found'}
                                     </div>
-                                )
-                            })}
+                                )}
 
-                            {filteredClients.length === 0 && (
-                                <div className="text-center py-20 text-white/50">
-                                    {lang === 'es' ? 'No hay resultados' : 'No results found'}
-                                </div>
-                            )}
-
-                            {activeTab === 'dashboard' && filteredClients.length > 5 && (
-                                <button
-                                    onClick={() => setActiveTab('clientes')}
-                                    className="w-full py-4 text-center text-white/50 hover:text-white hover:bg-white/5 rounded-xl transition-all border border-dashed border-white/10 hover:border-white/30"
-                                >
-                                    {lang === 'es' ? 'Ver todos los clientes...' : 'View all clients...'}
-                                </button>
-                            )}
+                                {activeTab === 'dashboard' && filteredClients.length > 5 && (
+                                    <button
+                                        onClick={() => setActiveTab('clientes')}
+                                        className="w-full py-4 text-center text-white/50 hover:text-white hover:bg-white/5 rounded-xl transition-all border border-dashed border-white/10 hover:border-white/30"
+                                    >
+                                        {lang === 'es' ? 'Ver todos los clientes...' : 'View all clients...'}
+                                    </button>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </>
             )}
 

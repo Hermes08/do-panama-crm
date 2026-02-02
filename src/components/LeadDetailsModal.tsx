@@ -52,23 +52,37 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                     .single();
 
                 if (error) throw error;
+                // Force a re-fetch of data to ensure UI is in sync with DB
                 if (onClientCreated && data) onClientCreated(data as Client);
                 onClose();
             } else {
                 // UPDATE
                 const { error } = await supabase
                     .from('crm_clients')
-                    .update(formData)
-                    .eq('id', client!.id); // client is safe here because isNew check
+                    .update({
+                        full_name: formData.full_name,
+                        status: formData.status,
+                        tag: formData.tag,
+                        budget: formData.budget,
+                        zone_project: formData.zone_project,
+                        interest_category: formData.interest_category,
+                        assigned_to: formData.assigned_to,
+                        last_contact_date: formData.last_contact_date,
+                        next_action: formData.next_action,
+                        next_action_date: formData.next_action_date,
+                        estimated_travel_date: formData.estimated_travel_date,
+                        detailed_notes: formData.detailed_notes
+                    })
+                    .eq('id', client!.id);
 
                 if (error) throw error;
                 // Notify parent to update state locally
                 if (onClientUpdated) onClientUpdated({ ...client, ...formData } as Client);
                 setIsEditing(false);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error saving client:", err);
-            alert("Error al guardar cambios");
+            alert(lang === 'es' ? `Error al guardar: ${err.message}` : `Error saving: ${err.message}`);
         } finally {
             setSaving(false);
         }
