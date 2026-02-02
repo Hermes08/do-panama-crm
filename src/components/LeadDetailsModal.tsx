@@ -47,7 +47,20 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                 // CREATE
                 const { data, error } = await supabase
                     .from('crm_clients')
-                    .insert([{ ...formData }])
+                    .insert([{
+                        full_name: formData.full_name,
+                        status: formData.status,
+                        tag: formData.tag,
+                        budget: formData.budget,
+                        zone_project: formData.zone_project,
+                        interest_category: formData.interest_category,
+                        assigned_to: formData.assigned_to,
+                        last_contact_date: formData.last_contact_date,
+                        next_action: formData.next_action,
+                        next_action_date: formData.next_action_date,
+                        estimated_travel_date: formData.estimated_travel_date,
+                        detailed_notes: formData.detailed_notes
+                    }])
                     .select()
                     .single();
 
