@@ -212,6 +212,7 @@ function createHelixBackground() {
 
     let angle = 0;
     function animateHelix() {
+        if (!ctx) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         for (let i = 0; i < 50; i++) {
@@ -311,6 +312,7 @@ function createRainBackground() {
     }
 
     function drawMatrix() {
+        if (!ctx) return;
         ctx.fillStyle = 'rgba(0, 10, 0, 0.05)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 

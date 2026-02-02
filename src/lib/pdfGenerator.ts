@@ -1,5 +1,4 @@
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
 interface PropertyData {
     title: string;
@@ -14,7 +13,6 @@ interface PropertyData {
     source: string;
 }
 
-// Helper to load image as data URL
 async function loadImageAsDataURL(url: string): Promise<string> {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -25,7 +23,7 @@ async function loadImageAsDataURL(url: string): Promise<string> {
             canvas.height = img.height;
             const ctx = canvas.getContext("2d");
             ctx?.drawImage(img, 0, 0);
-            resolve(canvas.toDataURL("image/jpeg", 0.8));
+            resolve(canvas.toDataURL("image/jpeg", 0.85));
         };
         img.onerror = reject;
         img.src = url;
@@ -37,297 +35,219 @@ export async function generatePropertyPDF(
     customImages: string[]
 ): Promise<Blob> {
     const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 15;
+    const W = doc.internal.pageSize.getWidth();
+    const H = doc.internal.pageSize.getHeight();
 
-    // ==================== PAGE 1: PREMIUM COVER WITH LIGHT COLORS ====================
-    // Soft gradient background (light blue to white)
-    doc.setFillColor(240, 248, 255); // Alice Blue
-    doc.rect(0, 0, pageWidth, pageHeight, "F");
+    // ========== PAGE 1: HERO + ESSENTIALS ==========
+    // Soft gradient background
+    doc.setFillColor(245, 250, 255);
+    doc.rect(0, 0, W, H, "F");
 
-    // Add hero image with soft overlay
-    const heroImage = customImages[0] || propertyData.images[0];
-    if (heroImage) {
+    // Hero image (full bleed top 60%)
+    const heroImg = customImages[0] || propertyData.images[0];
+    if (heroImg) {
         try {
-            const imgData = await loadImageAsDataURL(heroImage);
-            doc.addImage(imgData, "JPEG", 0, 0, pageWidth, pageHeight * 0.6, undefined, "FAST");
-
-            // Soft white gradient overlay (glassmorphism effect)
-            doc.setFillColor(255, 255, 255);
-            doc.setGState(new doc.GState({ opacity: 0.3 }));
-            doc.rect(0, pageHeight * 0.45, pageWidth, pageHeight * 0.15, "F");
-            doc.setGState(new doc.GState({ opacity: 1 }));
-        } catch (error) {
-            console.error("Failed to load hero image:", error);
+            const imgData = await loadImageAsDataURL(heroImg);
+            doc.addImage(imgData, "JPEG", 0, 0, W, H * 0.6, undefined, "FAST");
+        } catch (e) {
+            console.error("Hero image failed:", e);
         }
     }
 
-    // Glassmorphism title card
-    const titleY = pageHeight * 0.65;
+    // Glass card for property info
+    const cardY = H * 0.55;
+    const cardH = 65;
     doc.setFillColor(255, 255, 255);
-    doc.setGState(new doc.GState({ opacity: 0.85 }));
-    doc.roundedRect(margin, titleY, pageWidth - 2 * margin, 80, 5, 5, "F");
+    doc.setGState(new doc.GState({ opacity: 0.92 }));
+    doc.roundedRect(15, cardY, W - 30, cardH, 4, 4, "F");
     doc.setGState(new doc.GState({ opacity: 1 }));
 
-    // Soft border (teal accent)
-    doc.setDrawColor(0, 188, 212); // Teal
-    doc.setLineWidth(0.5);
-    doc.roundedRect(margin, titleY, pageWidth - 2 * margin, 80, 5, 5, "S");
+    doc.setDrawColor(0, 188, 212);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(15, cardY, W - 30, cardH, 4, 4, "S");
 
     // Title
-    doc.setTextColor(30, 41, 59); // Slate gray
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(30, 41, 59);
+    const titleLines = doc.splitTextToSize(propertyData.title, W - 40);
+    doc.text(titleLines[0], W / 2, cardY + 12, { align: "center" });
+
+    // Price
     doc.setFontSize(22);
-    doc.setFont("helvetica", "bold");
-    const titleLines = doc.splitTextToSize(propertyData.title, pageWidth - 40);
-    doc.text(titleLines, pageWidth / 2, titleY + 15, { align: "center" });
-
-    // Price - Large and prominent (teal color)
-    doc.setFontSize(26);
-    doc.setTextColor(0, 150, 136); // Teal
-    doc.text(propertyData.price, pageWidth / 2, titleY + 35, { align: "center" });
-
-    // Location with icon
-    doc.setFontSize(11);
-    doc.setTextColor(100, 116, 139); // Slate
-    doc.text("📍 " + propertyData.location, pageWidth / 2, titleY + 48, { align: "center" });
-
-    // Property stats in glassmorphism cards
-    const statsY = titleY + 60;
-    const cardWidth = 50;
-    const cardSpacing = 5;
-    const startX = (pageWidth - (cardWidth * 3 + cardSpacing * 2)) / 2;
-
-    // Helper to draw stat card with glassmorphism
-    const drawStatCard = (x: number, icon: string, value: string, label: string) => {
-        if (!value) return;
-
-        // Glass card background
-        doc.setFillColor(255, 255, 255);
-        doc.setGState(new doc.GState({ opacity: 0.7 }));
-        doc.roundedRect(x, statsY, cardWidth, 18, 3, 3, "F");
-        doc.setGState(new doc.GState({ opacity: 1 }));
-
-        // Soft teal border
-        doc.setDrawColor(0, 188, 212);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(x, statsY, cardWidth, 18, 3, 3, "S");
-
-        doc.setFontSize(10);
-        doc.setTextColor(30, 41, 59);
-        doc.text(icon + " " + value, x + cardWidth / 2, statsY + 8, { align: "center" });
-
-        doc.setFontSize(7);
-        doc.setTextColor(100, 116, 139);
-        doc.text(label, x + cardWidth / 2, statsY + 14, { align: "center" });
-    };
-
-    if (propertyData.bedrooms) drawStatCard(startX, "🛏️", propertyData.bedrooms, "Bedrooms");
-    if (propertyData.bathrooms) drawStatCard(startX + cardWidth + cardSpacing, "🚿", propertyData.bathrooms, "Bathrooms");
-    if (propertyData.area) drawStatCard(startX + (cardWidth + cardSpacing) * 2, "📐", propertyData.area, "Area");
-
-    // Source badge
-    doc.setFontSize(8);
-    doc.setTextColor(148, 163, 184);
-    doc.text("Source: " + propertyData.source, pageWidth / 2, pageHeight - 10, { align: "center" });
-
-    // ==================== PAGE 2: PROPERTY DETAILS WITH GLASSMORPHISM ====================
-    doc.addPage();
-    doc.setFillColor(248, 250, 252); // Very light blue-gray
-    doc.rect(0, 0, pageWidth, pageHeight, "F");
-
-    let currentY = 20;
-
-    // Section header with glassmorphism
-    doc.setFillColor(255, 255, 255);
-    doc.setGState(new doc.GState({ opacity: 0.8 }));
-    doc.roundedRect(margin - 5, currentY - 5, pageWidth - 2 * (margin - 5), 14, 3, 3, "F");
-    doc.setGState(new doc.GState({ opacity: 1 }));
-
-    doc.setDrawColor(0, 188, 212);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(margin - 5, currentY - 5, pageWidth - 2 * (margin - 5), 14, 3, 3, "S");
-
-    doc.setFontSize(16);
     doc.setTextColor(0, 150, 136);
-    doc.setFont("helvetica", "bold");
-    doc.text("PROPERTY OVERVIEW", margin, currentY + 5);
+    doc.text(propertyData.price, W / 2, cardY + 28, { align: "center" });
 
-    currentY += 22;
-
-    // Description card with glassmorphism
-    doc.setFillColor(255, 255, 255);
-    doc.setGState(new doc.GState({ opacity: 0.7 }));
-    const descHeight = Math.min(doc.splitTextToSize(propertyData.description, pageWidth - 2 * margin - 10).length * 5 + 10, 60);
-    doc.roundedRect(margin, currentY - 5, pageWidth - 2 * margin, descHeight, 3, 3, "F");
-    doc.setGState(new doc.GState({ opacity: 1 }));
-
-    doc.setDrawColor(0, 188, 212);
-    doc.setLineWidth(0.2);
-    doc.roundedRect(margin, currentY - 5, pageWidth - 2 * margin, descHeight, 3, 3, "S");
-
+    // Location
     doc.setFontSize(10);
-    doc.setTextColor(51, 65, 85);
+    doc.setTextColor(100, 116, 139);
     doc.setFont("helvetica", "normal");
-    const descLines = doc.splitTextToSize(propertyData.description, pageWidth - 2 * margin - 10);
-    doc.text(descLines, margin + 5, currentY);
-    currentY += descHeight + 10;
+    doc.text("📍 " + propertyData.location, W / 2, cardY + 38, { align: "center" });
 
-    // Features section
-    if (propertyData.features.length > 0) {
+    // Key stats (3 pills)
+    const statsY = cardY + 50;
+    const pillW = 48;
+    const gap = 4;
+    const startX = (W - (pillW * 3 + gap * 2)) / 2;
+
+    const drawPill = (x: number, icon: string, val: string) => {
+        if (!val) return;
         doc.setFillColor(255, 255, 255);
         doc.setGState(new doc.GState({ opacity: 0.8 }));
-        doc.roundedRect(margin - 5, currentY - 5, pageWidth - 2 * (margin - 5), 14, 3, 3, "F");
+        doc.roundedRect(x, statsY, pillW, 14, 2, 2, "F");
         doc.setGState(new doc.GState({ opacity: 1 }));
-
-        doc.setDrawColor(0, 188, 212);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(margin - 5, currentY - 5, pageWidth - 2 * (margin - 5), 14, 3, 3, "S");
-
-        doc.setFontSize(14);
-        doc.setTextColor(0, 150, 136);
-        doc.setFont("helvetica", "bold");
-        doc.text("KEY FEATURES", margin, currentY + 5);
-
-        currentY += 20;
-
-        // Features in glassmorphism card
-        const featuresHeight = Math.ceil(propertyData.features.slice(0, 12).length / 2) * 7 + 10;
-        doc.setFillColor(255, 255, 255);
-        doc.setGState(new doc.GState({ opacity: 0.6 }));
-        doc.roundedRect(margin, currentY - 5, pageWidth - 2 * margin, featuresHeight, 3, 3, "F");
-        doc.setGState(new doc.GState({ opacity: 1 }));
-
         doc.setDrawColor(0, 188, 212);
         doc.setLineWidth(0.2);
-        doc.roundedRect(margin, currentY - 5, pageWidth - 2 * margin, featuresHeight, 3, 3, "S");
-
-        // Features in two columns
+        doc.roundedRect(x, statsY, pillW, 14, 2, 2, "S");
         doc.setFontSize(9);
-        doc.setTextColor(51, 65, 85);
-        doc.setFont("helvetica", "normal");
+        doc.setTextColor(30, 41, 59);
+        doc.text(icon + " " + val, x + pillW / 2, statsY + 9, { align: "center" });
+    };
 
-        const featuresPerColumn = Math.ceil(propertyData.features.length / 2);
-        const columnWidth = (pageWidth - 3 * margin) / 2;
+    if (propertyData.bedrooms) drawPill(startX, "🛏️", propertyData.bedrooms);
+    if (propertyData.bathrooms) drawPill(startX + pillW + gap, "🚿", propertyData.bathrooms);
+    if (propertyData.area) drawPill(startX + (pillW + gap) * 2, "📐", propertyData.area);
 
-        propertyData.features.slice(0, 12).forEach((feature, index) => {
-            const col = index < featuresPerColumn ? 0 : 1;
-            const row = index % featuresPerColumn;
-            const x = margin + 5 + col * (columnWidth + margin);
-            const y = currentY + row * 7;
+    // Source
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    doc.text(propertyData.source, W / 2, H - 8, { align: "center" });
 
-            doc.setTextColor(0, 150, 136);
-            doc.text("●", x, y);
-            doc.setTextColor(51, 65, 85);
-            doc.text(feature.substring(0, 35), x + 5, y);
-        });
+    // ========== PAGE 2: DESCRIPTION + FEATURES ==========
+    doc.addPage();
+    doc.setFillColor(248, 250, 252);
+    doc.rect(0, 0, W, H, "F");
 
-        currentY += featuresHeight + 10;
-    }
+    let y = 20;
 
-    // Property Details Table with glassmorphism
-    if (currentY < pageHeight - 70) {
-        doc.setFillColor(255, 255, 255);
-        doc.setGState(new doc.GState({ opacity: 0.8 }));
-        doc.roundedRect(margin - 5, currentY - 5, pageWidth - 2 * (margin - 5), 14, 3, 3, "F");
-        doc.setGState(new doc.GState({ opacity: 1 }));
+    // Description section
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(0, 150, 136);
+    doc.text("ABOUT THIS PROPERTY", 15, y);
+    y += 10;
 
-        doc.setDrawColor(0, 188, 212);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(margin - 5, currentY - 5, pageWidth - 2 * (margin - 5), 14, 3, 3, "S");
+    doc.setFillColor(255, 255, 255);
+    doc.setGState(new doc.GState({ opacity: 0.75 }));
+    const descLines = doc.splitTextToSize(propertyData.description, W - 40);
+    const descH = Math.min(descLines.length * 5 + 12, 50);
+    doc.roundedRect(15, y - 5, W - 30, descH, 3, 3, "F");
+    doc.setGState(new doc.GState({ opacity: 1 }));
+    doc.setDrawColor(0, 188, 212);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(15, y - 5, W - 30, descH, 3, 3, "S");
 
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(51, 65, 85);
+    doc.text(descLines.slice(0, 8), 20, y);
+    y += descH + 8;
+
+    // Features
+    if (propertyData.features.length > 0) {
+        doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
         doc.setTextColor(0, 150, 136);
+        doc.text("KEY FEATURES", 15, y);
+        y += 10;
+
+        const feats = propertyData.features.slice(0, 10);
+        const cols = 2;
+        const colW = (W - 40) / cols;
+        const rows = Math.ceil(feats.length / cols);
+        const gridH = rows * 8 + 10;
+
+        doc.setFillColor(255, 255, 255);
+        doc.setGState(new doc.GState({ opacity: 0.65 }));
+        doc.roundedRect(15, y - 5, W - 30, gridH, 3, 3, "F");
+        doc.setGState(new doc.GState({ opacity: 1 }));
+        doc.setDrawColor(0, 188, 212);
+        doc.setLineWidth(0.2);
+        doc.roundedRect(15, y - 5, W - 30, gridH, 3, 3, "S");
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        feats.forEach((f, i) => {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            const x = 20 + col * colW;
+            const fy = y + row * 8;
+            doc.setTextColor(0, 150, 136);
+            doc.text("●", x, fy);
+            doc.setTextColor(51, 65, 85);
+            doc.text(f.substring(0, 30), x + 5, fy);
+        });
+        y += gridH + 8;
+    }
+
+    // Property details table (minimal)
+    if (y < H - 60) {
         doc.setFont("helvetica", "bold");
-        doc.text("SPECIFICATIONS", margin, currentY + 5);
+        doc.setFontSize(14);
+        doc.setTextColor(0, 150, 136);
+        doc.text("DETAILS", 15, y);
+        y += 8;
 
-        currentY += 18;
+        const details = [
+            ["Bedrooms", propertyData.bedrooms || "—"],
+            ["Bathrooms", propertyData.bathrooms || "—"],
+            ["Area", propertyData.area || "—"],
+            ["Location", propertyData.location],
+            ["Price", propertyData.price]
+        ];
 
-        const tableData = [];
-        if (propertyData.bedrooms) tableData.push(["Bedrooms", propertyData.bedrooms]);
-        if (propertyData.bathrooms) tableData.push(["Bathrooms", propertyData.bathrooms]);
-        if (propertyData.area) tableData.push(["Total Area", propertyData.area]);
-        tableData.push(["Location", propertyData.location]);
-        tableData.push(["Price", propertyData.price]);
-
-        autoTable(doc, {
-            startY: currentY,
-            head: [["Specification", "Details"]],
-            body: tableData,
-            theme: "grid",
-            headStyles: {
-                fillColor: [0, 188, 212], // Teal
-                textColor: [255, 255, 255],
-                fontStyle: "bold",
-                fontSize: 11,
-            },
-            bodyStyles: {
-                fillColor: [255, 255, 255],
-                textColor: [51, 65, 85],
-                fontSize: 10,
-            },
-            alternateRowStyles: {
-                fillColor: [248, 250, 252],
-            },
-            margin: { left: margin, right: margin },
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        details.forEach((d, i) => {
+            const rowY = y + i * 7;
+            doc.setTextColor(100, 116, 139);
+            doc.text(d[0], 20, rowY);
+            doc.setTextColor(30, 41, 59);
+            doc.text(d[1], W - 20, rowY, { align: "right" });
         });
     }
 
-    // ==================== PAGE 3+: IMAGE GALLERY WITH GLASSMORPHISM ====================
-    const allImages = [...customImages, ...propertyData.images].slice(0, 9);
-
-    if (allImages.length > 1) {
+    // ========== PAGE 3: PHOTO GALLERY ==========
+    const allImgs = [...customImages, ...propertyData.images].slice(0, 9);
+    if (allImgs.length > 1) {
         doc.addPage();
         doc.setFillColor(248, 250, 252);
-        doc.rect(0, 0, pageWidth, pageHeight, "F");
+        doc.rect(0, 0, W, H, "F");
 
-        doc.setFillColor(255, 255, 255);
-        doc.setGState(new doc.GState({ opacity: 0.8 }));
-        doc.roundedRect(margin - 5, 15, pageWidth - 2 * (margin - 5), 14, 3, 3, "F");
-        doc.setGState(new doc.GState({ opacity: 1 }));
-
-        doc.setDrawColor(0, 188, 212);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(margin - 5, 15, pageWidth - 2 * (margin - 5), 14, 3, 3, "S");
-
-        doc.setFontSize(16);
-        doc.setTextColor(0, 150, 136);
         doc.setFont("helvetica", "bold");
-        doc.text("PROPERTY GALLERY", margin, 23);
+        doc.setFontSize(14);
+        doc.setTextColor(0, 150, 136);
+        doc.text("GALLERY", 15, 18);
 
-        const imgWidth = (pageWidth - 4 * margin) / 2;
-        const imgHeight = imgWidth * 0.75;
-        let imgX = margin;
-        let imgY = 38;
+        const imgW = (W - 45) / 2;
+        const imgH = imgW * 0.7;
+        let imgX = 15;
+        let imgY = 28;
 
-        for (let i = 1; i < allImages.length && i < 9; i++) {
+        for (let i = 1; i < allImgs.length && i < 9; i++) {
             try {
-                const imgData = await loadImageAsDataURL(allImages[i]);
-
-                // Add image with soft border
-                doc.addImage(imgData, "JPEG", imgX, imgY, imgWidth, imgHeight, undefined, "FAST");
+                const imgData = await loadImageAsDataURL(allImgs[i]);
+                doc.addImage(imgData, "JPEG", imgX, imgY, imgW, imgH, undefined, "FAST");
                 doc.setDrawColor(0, 188, 212);
-                doc.setLineWidth(0.5);
-                doc.roundedRect(imgX, imgY, imgWidth, imgHeight, 2, 2, "S");
+                doc.setLineWidth(0.3);
+                doc.roundedRect(imgX, imgY, imgW, imgH, 2, 2, "S");
 
-                imgX += imgWidth + margin;
-                if (imgX > pageWidth - imgWidth - margin) {
-                    imgX = margin;
-                    imgY += imgHeight + margin;
-
-                    if (imgY > pageHeight - imgHeight - 20) {
+                imgX += imgW + 15;
+                if (imgX > W - imgW - 15) {
+                    imgX = 15;
+                    imgY += imgH + 15;
+                    if (imgY > H - imgH - 20) {
                         doc.addPage();
                         doc.setFillColor(248, 250, 252);
-                        doc.rect(0, 0, pageWidth, pageHeight, "F");
+                        doc.rect(0, 0, W, H, "F");
                         imgY = 20;
                     }
                 }
-            } catch (error) {
-                console.error(`Failed to load image ${i}:`, error);
+            } catch (e) {
+                console.error(`Image ${i} failed:`, e);
             }
         }
     }
 
-    // Return PDF as Blob for preview
     return doc.output("blob");
 }
