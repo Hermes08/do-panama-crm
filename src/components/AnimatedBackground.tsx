@@ -88,8 +88,8 @@ export default function AnimatedBackground({ theme = "cityHorizon", onThemeChang
                                 key={themeKey}
                                 onClick={() => handleThemeChange(themeKey)}
                                 className={`p-3 rounded-lg border transition-all text-xs ${currentTheme === themeKey
-                                        ? 'border-gleec-cyan bg-gleec-cyan/10 text-gleec-cyan'
-                                        : 'border-white/10 bg-white/5 text-white/70 hover:border-gleec-cyan/50 hover:bg-white/10'
+                                    ? 'border-gleec-cyan bg-gleec-cyan/10 text-gleec-cyan'
+                                    : 'border-white/10 bg-white/5 text-white/70 hover:border-gleec-cyan/50 hover:bg-white/10'
                                     }`}
                             >
                                 {backgroundThemes[themeKey].name}
@@ -171,7 +171,7 @@ function createCircuitBackground() {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('width', '100%');
     svg.setAttribute('height', '100%');
-    svg.className = 'circuit-svg';
+    svg.setAttribute('class', 'circuit-svg');
 
     for (let i = 0; i < 20; i++) {
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -181,7 +181,7 @@ function createCircuitBackground() {
         line.setAttribute('y2', Math.random() * 100 + '%');
         line.setAttribute('stroke', 'rgba(0, 255, 65, 0.3)');
         line.setAttribute('stroke-width', '2');
-        line.className = 'circuit-line';
+        line.setAttribute('class', 'circuit-line');
         svg.appendChild(line);
 
         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -189,7 +189,7 @@ function createCircuitBackground() {
         circle.setAttribute('cy', Math.random() * 100 + '%');
         circle.setAttribute('r', '4');
         circle.setAttribute('fill', 'rgba(0, 255, 65, 0.6)');
-        circle.className = 'circuit-node';
+        circle.setAttribute('class', 'circuit-node');
         svg.appendChild(circle);
     }
 
@@ -204,7 +204,7 @@ function createHelixBackground() {
     const canvas = document.createElement('canvas');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    canvas.className = 'helix-canvas';
+    canvas.setAttribute('class', 'helix-canvas');
     container.appendChild(canvas);
 
     const ctx = canvas.getContext('2d');
@@ -263,7 +263,7 @@ function createStarsBackground() {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('width', '100%');
     svg.setAttribute('height', '100%');
-    svg.className = 'constellation-svg';
+    svg.setAttribute('class', 'constellation-svg');
     svg.style.position = 'absolute';
     svg.style.top = '0';
     svg.style.left = '0';
@@ -295,7 +295,7 @@ function createRainBackground() {
     const canvas = document.createElement('canvas');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    canvas.className = 'matrix-canvas';
+    canvas.setAttribute('class', 'matrix-canvas');
     container.appendChild(canvas);
 
     const ctx = canvas.getContext('2d');
@@ -389,7 +389,7 @@ function createNetworkBackground() {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('width', '100%');
     svg.setAttribute('height', '100%');
-    svg.className = 'network-svg';
+    svg.setAttribute('class', 'network-svg');
     svg.style.position = 'absolute';
     svg.style.top = '0';
     svg.style.left = '0';
