@@ -5,6 +5,7 @@ import { Search, User, Zap, AlertTriangle, Snowflake, HelpCircle, Briefcase, X, 
 import { supabase } from "@/lib/supabaseClient"; // Use the client we set up
 import { Client } from "@/types";
 import LeadDetailsModal from "@/components/LeadDetailsModal";
+import PropertyPDFGenerator from "@/components/PropertyPDFGenerator";
 import { translations } from "@/lib/i18n";
 
 // Fallback initial data (optional, but good for SSR/static or loading state)
@@ -280,7 +281,8 @@ export default function Home() {
                     { id: 'dashboard', label: t.tabs.dashboard },
                     { id: 'clientes', label: t.tabs.clientes },
                     { id: 'calendar', label: t.tabs.calendar },
-                    { id: 'chat', label: t.tabs.chat }
+                    { id: 'chat', label: t.tabs.chat },
+                    { id: 'propiedades', label: t.tabs.propiedades } // Added new tab
                 ].map((tab) => (
                     <button
                         key={tab.id}
