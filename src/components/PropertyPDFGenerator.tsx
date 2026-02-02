@@ -31,6 +31,7 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
     const [customImages, setCustomImages] = useState<string[]>([]);
     const [error, setError] = useState("");
     const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+    const [showPdfPreview, setShowPdfPreview] = useState(false);
 
     const t = lang === 'es' ? {
         title: "Generador de PDFs de Propiedades",
@@ -139,6 +140,7 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
         try {
             const blob = await generatePropertyPDF(dataToUse, customImages);
             setPdfBlob(blob);
+            setShowPdfPreview(true); // Show preview modal
         } catch (err) {
             setError("PDF generation failed");
         } finally {
@@ -315,7 +317,51 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                             <Download className="w-5 h-5" />
                             {t.downloadBtn}
                         </button>
-                    )}
+                    ))}
+                </div>
+            )}
+
+            {/* PDF Preview Modal */}
+            {showPdfPreview && pdfBlob && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+                    <div className="glass-card p-6 w-full max-w-4xl max-h-[90vh] flex flex-col">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-bold text-white">PDF Preview</h3>
+                            <button
+                                onClick={() => setShowPdfPreview(false)}
+                                className="text-white/70 hover:text-white"
+                            >
+                                <XCircle className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 bg-black/50 rounded-lg overflow-hidden mb-4">
+                            <iframe
+                                src={URL.createObjectURL(pdfBlob)}
+                                className="w-full h-full min-h-[500px]"
+                                title="PDF Preview"
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowPdfPreview(false)}
+                                className="flex-1 glass-btn px-6 py-3 bg-white/10 text-white border-white/20 hover:bg-white/20"
+                            >
+                                Close Preview
+                            </button>
+                            <button
+                                onClick={() => {
+                                    handleDownload();
+                                    setShowPdfPreview(false);
+                                }}
+                                className="flex-1 glass-btn px-6 py-3 bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold flex items-center justify-center gap-2"
+                            >
+                                <Download className="w-5 h-5" />
+                                {t.downloadBtn}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

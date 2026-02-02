@@ -506,6 +506,12 @@ export default function Home() {
                 </div>
             )}
 
+            {/* Scroll to top when Properties tab opens */}
+            {activeTab === 'propiedades' && typeof window !== 'undefined' && (() => {
+                setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
+                return null;
+            })()}
+
             {/* LeadDetailsModal */}
             <LeadDetailsModal
                 isOpen={!!selectedClient || isCreatingClient}
