@@ -317,7 +317,7 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                             <Download className="w-5 h-5" />
                             {t.downloadBtn}
                         </button>
-                    ))}
+                    )}
                 </div>
             )}
 
