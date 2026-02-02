@@ -63,7 +63,7 @@ export default function Home() {
             hot: clientsData.filter(c => c.tag?.toLowerCase().includes("hot") || c.tag?.includes("🔥")).length,
             active: clientsData.filter(c => c.status?.toLowerCase().includes("seguimiento") || c.status?.toLowerCase().includes("pendiente") || c.status?.toLowerCase().includes("active")).length,
             suspicious: clientsData.filter(c => c.tag?.toLowerCase().includes("sospechoso") || c.tag?.includes("⚠️")).length,
-            closing: clientsData.filter(c => c.status === "En Cierre" || c.tag?.toLowerCase().includes("cierre")).length,
+            closing: clientsData.filter(c => c.status === "Cerrando" || c.status === "Cerrado" || c.tag?.toLowerCase().includes("cierre")).length,
         };
     }, [clientsData]);
 
@@ -79,7 +79,7 @@ export default function Home() {
         } else if (statusFilter === "suspicious") {
             data = data.filter(c => c.tag?.toLowerCase().includes("sospechoso") || c.tag?.includes("⚠️"));
         } else if (statusFilter === "closing") {
-            data = data.filter(c => c.status === "En Cierre" || c.tag?.toLowerCase().includes("cierre"));
+            data = data.filter(c => c.status === "Cerrando" || c.status === "Cerrado" || c.tag?.toLowerCase().includes("cierre"));
         }
 
         // Search Filtering

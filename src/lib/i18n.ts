@@ -46,7 +46,8 @@ export const translations = {
             "Cliente perdido": "Cliente perdido",
             "Congelado": "Congelado",
             "⚫ Congelado": "Congelado",
-            "En Cierre": "En Cierre"
+            "Cerrando": "Cerrando",
+            "Cerrado": "Cerrado"
         },
         tags: {
             "Hot": "Caliente",
@@ -112,7 +113,8 @@ export const translations = {
             "Cliente perdido": "Lost Client",
             "Congelado": "Frozen",
             "⚫ Congelado": "Frozen",
-            "En Cierre": "Closing Process"
+            "Cerrando": "Closing Process",
+            "Cerrado": "Closed / Won"
         },
         tags: {
             "Hot": "Hot",
