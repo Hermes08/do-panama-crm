@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient"; // Use the client we set up
 import { Client } from "@/types";
 import LeadDetailsModal from "@/components/LeadDetailsModal";
 import PropertyPDFGenerator from "@/components/PropertyPDFGenerator";
+import DashboardCharts from "@/components/DashboardCharts";
 import { translations } from "@/lib/i18n";
 
 // Fallback initial data (optional, but good for SSR/static or loading state)
@@ -412,6 +413,9 @@ export default function Home() {
                             ))}
                         </div>
                     )}
+
+                    {/* Advanced Charts Section */}
+                    <DashboardCharts clients={filteredClients} lang={lang} />
 
                     {/* Main Content Area */}
                     <div className="glass-card p-8 min-h-[500px]">

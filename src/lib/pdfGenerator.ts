@@ -28,37 +28,66 @@ export async function generatePropertyPDF(
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 20;
 
-    // Page 1: Cover Page
-    doc.setFillColor(10, 25, 47); // Dark navy background
+    // Page 1: Cover Page with Glassmorphism
+    // Deep gradient background
+    doc.setFillColor(10, 25, 47); // Deep navy
     doc.rect(0, 0, pageWidth, pageHeight, 'F');
+
+    // Add gradient overlay (simulated with multiple rectangles)
+    for (let i = 0; i < 20; i++) {
+        const alpha = 0.05 - (i * 0.002);
+        doc.setFillColor(0, 242, 234, alpha); // Gleec cyan with decreasing opacity
+        doc.rect(0, i * (pageHeight / 20), pageWidth, pageHeight / 20, 'F');
+    }
 
     // Add main image if available
     const mainImage = customImages[0] || propertyData.images[0];
     if (mainImage) {
         try {
             const imgData = await loadImageAsDataURL(mainImage);
-            doc.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight * 0.6, undefined, 'FAST');
+            // Image with rounded corners effect (simulated)
+            doc.addImage(imgData, 'JPEG', margin, margin * 2, pageWidth - 2 * margin, (pageHeight * 0.5), undefined, 'FAST');
+
+            // Glassmorphism overlay on image
+            doc.setFillColor(255, 255, 255, 0.1);
+            doc.roundedRect(margin, margin * 2, pageWidth - 2 * margin, pageHeight * 0.5, 10, 10, 'F');
         } catch (error) {
             console.error('Failed to load cover image:', error);
         }
     }
 
-    // Title overlay
-    doc.setFillColor(0, 0, 0, 0.5);
-    doc.rect(0, pageHeight * 0.5, pageWidth, pageHeight * 0.5, 'F');
+    // Premium title card with glass effect
+    const titleY = pageHeight * 0.6;
+    doc.setFillColor(18, 18, 18, 0.8); // Dark glass
+    doc.roundedRect(margin, titleY, pageWidth - 2 * margin, pageHeight * 0.35, 15, 15, 'F');
 
+    // Neon border effect
+    doc.setDrawColor(0, 242, 234); // Gleec cyan
+    doc.setLineWidth(0.5);
+    doc.roundedRect(margin, titleY, pageWidth - 2 * margin, pageHeight * 0.35, 15, 15, 'S');
+
+    // Title text
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(28);
     doc.setFont('helvetica', 'bold');
-    doc.text(propertyData.title, pageWidth / 2, pageHeight * 0.65, { align: 'center', maxWidth: pageWidth - 40 });
+    doc.text(propertyData.title, pageWidth / 2, titleY + 20, { align: 'center', maxWidth: pageWidth - 60 });
 
-    doc.setFontSize(20);
+    // Price with gradient effect (simulated with gold color)
+    doc.setFontSize(24);
     doc.setTextColor(212, 175, 55); // Gold
-    doc.text(propertyData.price, pageWidth / 2, pageHeight * 0.75, { align: 'center' });
+    doc.text(propertyData.price, pageWidth / 2, titleY + 40, { align: 'center' });
 
+    // Location
     doc.setFontSize(14);
-    doc.setTextColor(200, 200, 200);
-    doc.text(propertyData.location, pageWidth / 2, pageHeight * 0.82, { align: 'center' });
+    doc.setTextColor(0, 242, 234); // Cyan
+    doc.text(propertyData.location, pageWidth / 2, titleY + 52, { align: 'center' });
+
+    // Premium badge
+    doc.setFillColor(125, 0, 255, 0.3); // Purple glass
+    doc.roundedRect(pageWidth / 2 - 30, titleY + 60, 60, 12, 6, 6, 'F');
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.text('PREMIUM LISTING', pageWidth / 2, titleY + 68, { align: 'center' });
 
     // Page 2: Property Details
     doc.addPage();
