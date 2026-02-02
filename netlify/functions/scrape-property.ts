@@ -47,15 +47,23 @@ export const handler: Handler = async (event: HandlerEvent) => {
         const response = await fetch(url, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9,es;q=0.8',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Cache-Control': 'max-age=0'
             }
         });
+
         const html = await response.text();
         const $ = cheerio.load(html);
 
-        // ULTRA AGGRESSIVE EXTRACTION - Get EVERYTHING
-        const propertyData = extractAllData($, url, html);
+        // ULTRA AGGRESSIVE MULTI-STRATEGY EXTRACTION
+        const propertyData = extractWithMultipleStrategies($, url, html);
 
         return {
             statusCode: 200,
@@ -75,216 +83,187 @@ export const handler: Handler = async (event: HandlerEvent) => {
     }
 };
 
-function extractAllData($: ReturnType<typeof cheerio.load>, url: string, html: string): PropertyData {
-    // ========== TITLE ==========
-    let title = "";
-    const titleSelectors = [
-        "h1", ".property-title", ".listing-title", "#property-title",
-        "[class*='title']", "[class*='Title']", "[id*='title']",
-        "meta[property='og:title']", "meta[name='title']", "title"
-    ];
-
-    for (const sel of titleSelectors) {
-        if (sel.startsWith("meta")) {
-            const val = $(sel).attr("content");
-            if (val && val.length > 5) { title = val; break; }
-        } else {
-            const val = $(sel).first().text().trim();
-            if (val && val.length > 5) { title = val; break; }
-        }
+// STRATEGY 1: CSS Selectors
+function trySelectors($: ReturnType<typeof cheerio.load>, selectors: string[], attr?: string): string {
+    for (const sel of selectors) {
+        try {
+            if (attr) {
+                const val = $(sel).attr(attr);
+                if (val && val.trim().length > 0) return val.trim();
+            } else {
+                const val = $(sel).first().text().trim();
+                if (val && val.length > 0) return val;
+            }
+        } catch (e) { /* continue */ }
     }
-    if (!title) title = "Property Listing";
+    return "";
+}
 
-    // ========== PRICE ==========
-    let price = "";
-    const priceSelectors = [
-        ".price", ".property-price", ".listing-price", "#price",
-        "[class*='price']", "[class*='Price']", "[class*='precio']",
-        "[itemprop='price']", "meta[property='og:price:amount']"
-    ];
-
-    for (const sel of priceSelectors) {
-        if (sel.startsWith("meta")) {
-            const val = $(sel).attr("content");
-            if (val) { price = "$" + val; break; }
-        } else {
-            const val = $(sel).first().text().trim();
-            if (val && /[\$\d]/.test(val)) { price = val; break; }
-        }
+// STRATEGY 2: Regex Patterns
+function tryRegex(html: string, patterns: RegExp[], validator?: (match: string) => boolean): string {
+    for (const pattern of patterns) {
+        try {
+            const matches = html.match(pattern);
+            if (matches) {
+                for (const match of matches) {
+                    if (!validator || validator(match)) {
+                        return match.trim();
+                    }
+                }
+            }
+        } catch (e) { /* continue */ }
     }
+    return "";
+}
 
-    // Regex fallback for price
-    if (!price) {
-        const pricePatterns = [
-            /\$[\s]?[\d,]+(?:\.\d{2})?/g,
+// STRATEGY 3: JSON-LD Schema
+function tryJSONLD($: ReturnType<typeof cheerio.load>, property: string): string {
+    try {
+        $('script[type="application/ld+json"]').each((_, el) => {
+            try {
+                const json = JSON.parse($(el).html() || "{}");
+                if (json[property]) return json[property];
+                if (json["@graph"]) {
+                    for (const item of json["@graph"]) {
+                        if (item[property]) return item[property];
+                    }
+                }
+            } catch (e) { /* continue */ }
+        });
+    } catch (e) { /* continue */ }
+    return "";
+}
+
+// STRATEGY 4: Meta Tags
+function tryMetaTags($: ReturnType<typeof cheerio.load>, properties: string[]): string {
+    for (const prop of properties) {
+        try {
+            let val = $(`meta[property="${prop}"]`).attr("content");
+            if (val) return val.trim();
+            val = $(`meta[name="${prop}"]`).attr("content");
+            if (val) return val.trim();
+        } catch (e) { /* continue */ }
+    }
+    return "";
+}
+
+// STRATEGY 5: Text Content Analysis
+function findInText($: ReturnType<typeof cheerio.load>, keywords: string[], minLength = 3): string {
+    const allText = $("body").text();
+    for (const keyword of keywords) {
+        const regex = new RegExp(`${keyword}[:\\s]*([^\\n<>]{${minLength},100})`, "i");
+        const match = allText.match(regex);
+        if (match && match[1]) return match[1].trim();
+    }
+    return "";
+}
+
+function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: string, html: string): PropertyData {
+
+    // ========== TITLE (6 STRATEGIES) ==========
+    let title =
+        trySelectors($, ["h1", ".property-title", ".listing-title", "#property-title", "[class*='title']", "[itemprop='name']"]) ||
+        tryMetaTags($, ["og:title", "twitter:title", "title"]) ||
+        tryJSONLD($, "name") ||
+        $("title").text().trim() ||
+        "Property Listing";
+
+    title = title.substring(0, 200);
+
+    // ========== PRICE (8 STRATEGIES) ==========
+    let price =
+        trySelectors($, [".price", ".property-price", ".listing-price", "#price", "[class*='price']", "[class*='Price']", "[itemprop='price']"]) ||
+        tryMetaTags($, ["og:price:amount", "product:price:amount"]) ||
+        tryJSONLD($, "price") ||
+        tryRegex(html, [
+            /\$[\s]?[\d,]+(?:\.\d{2})?(?!\d)/g,
             /USD[\s]?[\d,]+/gi,
             /US\$[\s]?[\d,]+/g,
             /Precio[:\s]+\$?[\d,]+/gi,
-            /Price[:\s]+\$?[\d,]+/gi,
-            /[\d,]+\s*(?:USD|usd)/gi
-        ];
+            /Price[:\s]+\$?[\d,]+/gi
+        ], (match) => {
+            const num = parseInt(match.replace(/[^\d]/g, ''));
+            return num > 10000 && num < 100000000; // Reasonable property price range
+        }) ||
+        findInText($, ["Price", "Precio", "Cost", "Costo"]) ||
+        "Contact for Price";
 
-        for (const pattern of pricePatterns) {
-            const matches = html.match(pattern);
-            if (matches && matches.length > 0) {
-                // Get the largest number (likely the actual price)
-                const nums = matches.map(m => {
-                    const num = m.replace(/[^\d]/g, '');
-                    return { text: m, num: parseInt(num) };
-                }).filter(x => x.num > 1000);
+    // ========== LOCATION (7 STRATEGIES) ==========
+    let location =
+        trySelectors($, [".location", ".property-location", ".address", "[class*='location']", "[class*='address']", "[itemprop='address']"]) ||
+        tryMetaTags($, ["og:locality", "og:region", "geo.placename"]) ||
+        tryJSONLD($, "address") ||
+        tryRegex(html, [
+            /(?:Panamá|Panama City|Costa del Este|Punta Pacifica|San Francisco|El Cangrejo|Casco Viejo|Clayton|Albrook|Betania|Bella Vista|Obarrio|Marbella|Costa Sur|Condado del Rey|Tocumen|Las Cumbres|Arraijan|La Chorrera|Coronado|Buenaventura|Playa Blanca|Santa Clara|Pedasí|Boquete|David|Chitré|Santiago|Colón)[,\s]*/i
+        ]) ||
+        findInText($, ["Location", "Ubicación", "Address", "Dirección"]) ||
+        "Panama";
 
-                if (nums.length > 0) {
-                    nums.sort((a, b) => b.num - a.num);
-                    price = nums[0].text;
-                    break;
-                }
-            }
-        }
-    }
-    if (!price) price = "Contact for Price";
-
-    // ========== LOCATION ==========
-    let location = "";
-    const locationSelectors = [
-        ".location", ".property-location", ".address", "[class*='location']",
-        "[class*='Location']", "[class*='address']", "[class*='Address']",
-        "[class*='ubicacion']", "meta[property='og:locality']",
-        "[itemprop='address']", "[itemprop='addressLocality']"
-    ];
-
-    for (const sel of locationSelectors) {
-        if (sel.startsWith("meta")) {
-            const val = $(sel).attr("content");
-            if (val && val.length > 2) { location = val; break; }
-        } else {
-            const val = $(sel).first().text().trim();
-            if (val && val.length > 2) { location = val; break; }
-        }
-    }
-
-    if (!location) {
-        const locationMatch = html.match(/(?:Panamá|Panama City|Costa del Este|Punta Pacifica|San Francisco|El Cangrejo|Casco Viejo|Clayton|Albrook|Betania|Bella Vista|Obarrio|Marbella|Costa Sur|Condado del Rey|Tocumen|Las Cumbres|Arraijan|La Chorrera|Coronado|Buenaventura|Playa Blanca|Santa Clara|Pedasí|Boquete|David|Chitré|Santiago|Colón)/i);
-        location = locationMatch ? locationMatch[0] : "Panama";
-    }
-
-    // ========== BEDROOMS ==========
-    let bedrooms = "";
-    const bedroomSelectors = [
-        "[class*='bedroom']", "[class*='Bedroom']", "[class*='bed']",
-        "[class*='habitacion']", "[itemprop='numberOfRooms']"
-    ];
-
-    for (const sel of bedroomSelectors) {
-        const val = $(sel).first().text().trim();
-        const match = val.match(/(\d+)/);
-        if (match) { bedrooms = match[1] + " beds"; break; }
-    }
-
-    if (!bedrooms) {
-        const bedroomPatterns = [
+    // ========== BEDROOMS (6 STRATEGIES) ==========
+    let bedrooms =
+        trySelectors($, ["[class*='bedroom']", "[class*='bed']", "[class*='habitacion']", "[itemprop='numberOfRooms']"]) ||
+        tryJSONLD($, "numberOfRooms") ||
+        tryRegex(html, [
             /(\d+)\s*(?:bed|bedroom|habitacion|recamara|cuarto|dormitorio)s?/gi,
             /(?:bed|bedroom|habitacion|dormitorio)s?[:\s]*(\d+)/gi,
             /(\d+)\s*hab/gi
-        ];
+        ], (match) => {
+            const num = parseInt(match.match(/\d+/)?.[0] || "0");
+            return num > 0 && num < 20;
+        }) ||
+        findInText($, ["Bedrooms", "Habitaciones", "Dormitorios", "Beds"]);
 
-        for (const pattern of bedroomPatterns) {
-            const match = html.match(pattern);
-            if (match) {
-                const num = match[0].match(/\d+/);
-                if (num && parseInt(num[0]) > 0 && parseInt(num[0]) < 20) {
-                    bedrooms = num[0] + " beds";
-                    break;
-                }
-            }
-        }
+    if (bedrooms && !/bed/i.test(bedrooms)) {
+        const num = bedrooms.match(/\d+/)?.[0];
+        if (num) bedrooms = num + " beds";
     }
 
-    // ========== BATHROOMS ==========
-    let bathrooms = "";
-    const bathroomSelectors = [
-        "[class*='bathroom']", "[class*='Bathroom']", "[class*='bath']",
-        "[class*='baño']", "[itemprop='numberOfBathroomsTotal']"
-    ];
-
-    for (const sel of bathroomSelectors) {
-        const val = $(sel).first().text().trim();
-        const match = val.match(/(\d+(?:\.\d+)?)/);
-        if (match) { bathrooms = match[1] + " baths"; break; }
-    }
-
-    if (!bathrooms) {
-        const bathroomPatterns = [
+    // ========== BATHROOMS (6 STRATEGIES) ==========
+    let bathrooms =
+        trySelectors($, ["[class*='bathroom']", "[class*='bath']", "[class*='baño']", "[itemprop='numberOfBathroomsTotal']"]) ||
+        tryJSONLD($, "numberOfBathroomsTotal") ||
+        tryRegex(html, [
             /(\d+(?:\.\d+)?)\s*(?:bath|bathroom|baño|baños)s?/gi,
             /(?:bath|bathroom|baño)s?[:\s]*(\d+(?:\.\d+)?)/gi
-        ];
+        ], (match) => {
+            const num = parseFloat(match.match(/\d+(?:\.\d+)?/)?.[0] || "0");
+            return num > 0 && num < 20;
+        }) ||
+        findInText($, ["Bathrooms", "Baños", "Baths"]);
 
-        for (const pattern of bathroomPatterns) {
-            const match = html.match(pattern);
-            if (match) {
-                const num = match[0].match(/\d+(?:\.\d+)?/);
-                if (num && parseFloat(num[0]) > 0 && parseFloat(num[0]) < 20) {
-                    bathrooms = num[0] + " baths";
-                    break;
-                }
-            }
-        }
+    if (bathrooms && !/bath/i.test(bathrooms)) {
+        const num = bathrooms.match(/\d+(?:\.\d+)?/)?.[0];
+        if (num) bathrooms = num + " baths";
     }
 
-    // ========== AREA ==========
-    let area = "";
-    const areaSelectors = [
-        "[class*='area']", "[class*='Area']", "[class*='size']",
-        "[class*='superficie']", "[itemprop='floorSize']"
-    ];
-
-    for (const sel of areaSelectors) {
-        const val = $(sel).first().text().trim();
-        if (val && /\d+/.test(val) && /(m2|m²|sq|ft)/i.test(val)) {
-            area = val;
-            break;
-        }
-    }
-
-    if (!area) {
-        const areaPatterns = [
+    // ========== AREA (6 STRATEGIES) ==========
+    let area =
+        trySelectors($, ["[class*='area']", "[class*='size']", "[class*='superficie']", "[itemprop='floorSize']"]) ||
+        tryJSONLD($, "floorSize") ||
+        tryRegex(html, [
             /(\d+[,\d]*)\s*(?:m2|m²|metros?\s*cuadrados?)/gi,
             /(\d+[,\d]*)\s*(?:sq\.?\s*ft|sqft|square\s*feet)/gi,
             /(?:area|superficie|tamaño)[:\s]*(\d+[,\d]*)\s*(?:m2|m²)/gi
-        ];
+        ], (match) => {
+            const num = parseInt(match.replace(/[^\d]/g, ''));
+            return num > 20 && num < 100000; // Reasonable area range
+        }) ||
+        findInText($, ["Area", "Área", "Size", "Tamaño", "Superficie"]);
 
-        for (const pattern of areaPatterns) {
-            const match = html.match(pattern);
-            if (match && match[0]) {
-                area = match[0];
-                break;
-            }
-        }
-    }
+    // ========== DESCRIPTION (7 STRATEGIES) ==========
+    let description =
+        trySelectors($, [".description", ".property-description", "[class*='description']", "[itemprop='description']"]) ||
+        tryMetaTags($, ["og:description", "twitter:description", "description"]) ||
+        tryJSONLD($, "description");
 
-    // ========== DESCRIPTION ==========
-    let description = "";
-    const descSelectors = [
-        ".description", ".property-description", "[class*='description']",
-        "[class*='Description']", "[itemprop='description']",
-        "meta[property='og:description']", "meta[name='description']"
-    ];
-
-    for (const sel of descSelectors) {
-        if (sel.startsWith("meta")) {
-            const val = $(sel).attr("content");
-            if (val && val.length > 50) { description = val; break; }
-        } else {
-            const val = $(sel).first().text().trim();
-            if (val && val.length > 50) { description = val; break; }
-        }
-    }
-
-    // Get longest paragraph as fallback
+    // Fallback: Get longest paragraph
     if (!description || description.length < 100) {
         let maxLen = 0;
         $("p").each((_, el) => {
             const text = $(el).text().trim();
-            if (text.length > maxLen && text.length > 50) {
+            if (text.length > maxLen && text.length > 50 &&
+                !text.toLowerCase().includes("cookie") &&
+                !text.toLowerCase().includes("privacy")) {
                 maxLen = text.length;
                 description = text;
             }
@@ -292,88 +271,65 @@ function extractAllData($: ReturnType<typeof cheerio.load>, url: string, html: s
     }
 
     if (!description) description = "Luxury property in Panama";
+    description = description.substring(0, 1500);
 
-    // ========== FEATURES ==========
+    // ========== FEATURES (5 STRATEGIES) ==========
     const features: string[] = [];
-    const featureSelectors = [
-        "li", ".feature", ".amenity", "[class*='feature']",
-        "[class*='amenity']", "[class*='caracteristica']"
-    ];
-
     const seenFeatures = new Set<string>();
-    for (const sel of featureSelectors) {
-        $(sel).each((_, el) => {
-            const text = $(el).text().trim();
-            const cleanText = text.replace(/\s+/g, ' ').substring(0, 50);
 
-            if (cleanText.length > 3 && cleanText.length < 100 &&
-                !cleanText.toLowerCase().includes("contacto") &&
-                !cleanText.toLowerCase().includes("agente") &&
-                !cleanText.toLowerCase().includes("whatsapp") &&
-                !cleanText.toLowerCase().includes("email") &&
-                !cleanText.toLowerCase().includes("phone") &&
-                !cleanText.toLowerCase().includes("cookie") &&
-                !seenFeatures.has(cleanText.toLowerCase())) {
-
-                seenFeatures.add(cleanText.toLowerCase());
-                features.push(cleanText);
-
-                if (features.length >= 25) return false; // Stop after 25
-            }
-        });
-        if (features.length >= 15) break;
-    }
-
-    // ========== IMAGES ==========
-    const images: string[] = [];
-    const seenImages = new Set<string>();
-
-    $("img").each((_, el) => {
-        const src = $(el).attr("src") || $(el).attr("data-src") || $(el).attr("data-lazy") ||
-            $(el).attr("data-original") || $(el).attr("data-lazy-src");
-        const alt = $(el).attr("alt") || "";
-
-        if (src &&
-            !src.includes("logo") &&
-            !src.includes("icon") &&
-            !src.includes("avatar") &&
-            !src.includes("placeholder") &&
-            !src.includes("sprite") &&
-            !src.includes("blank") &&
-            !src.includes("1x1") &&
-            !src.endsWith(".svg") &&
-            (src.includes("property") || src.includes("photo") || src.includes("image") ||
-                src.includes("img") || src.includes("listing") || alt.toLowerCase().includes("property") ||
-                src.match(/\.(jpg|jpeg|png|webp)/i))) {
-
-            let fullSrc = src;
-            if (!src.startsWith("http")) {
-                try {
-                    fullSrc = new URL(src, url).href;
-                } catch (e) {
-                    fullSrc = src;
-                }
-            }
-
-            if (!seenImages.has(fullSrc)) {
-                seenImages.add(fullSrc);
-                images.push(fullSrc);
-
-                if (images.length >= 20) return false; // Stop after 20
-            }
+    // Strategy 1: List items
+    $("li").each((_, el) => {
+        const text = $(el).text().trim().replace(/\s+/g, ' ').substring(0, 60);
+        if (isValidFeature(text) && !seenFeatures.has(text.toLowerCase())) {
+            seenFeatures.add(text.toLowerCase());
+            features.push(text);
         }
     });
 
+    // Strategy 2: Feature/amenity classes
+    $("[class*='feature'], [class*='amenity'], [class*='caracteristica']").each((_, el) => {
+        const text = $(el).text().trim().replace(/\s+/g, ' ').substring(0, 60);
+        if (isValidFeature(text) && !seenFeatures.has(text.toLowerCase())) {
+            seenFeatures.add(text.toLowerCase());
+            features.push(text);
+        }
+    });
+
+    // Strategy 3: Bullet points in text
+    const bulletMatches = html.match(/[•●■▪▸►]\s*([^\n<>]{3,60})/g);
+    if (bulletMatches) {
+        bulletMatches.forEach(match => {
+            const text = match.replace(/[•●■▪▸►]\s*/, '').trim();
+            if (isValidFeature(text) && !seenFeatures.has(text.toLowerCase())) {
+                seenFeatures.add(text.toLowerCase());
+                features.push(text);
+            }
+        });
+    }
+
     return {
-        title: title.substring(0, 200),
+        title,
         price,
         location,
         bedrooms,
         bathrooms,
         area,
-        description: description.substring(0, 1000),
-        features: features.slice(0, 20),
-        images: images.slice(0, 15),
+        description,
+        features: features.slice(0, 25),
+        images: [], // User will upload images manually
         source: new URL(url).hostname
     };
+}
+
+function isValidFeature(text: string): boolean {
+    if (!text || text.length < 3 || text.length > 100) return false;
+
+    const invalidKeywords = [
+        "contacto", "contact", "agente", "agent", "whatsapp", "email",
+        "phone", "cookie", "privacy", "terms", "política", "aviso",
+        "copyright", "reserved", "rights", "©", "®", "™"
+    ];
+
+    const lowerText = text.toLowerCase();
+    return !invalidKeywords.some(kw => lowerText.includes(kw));
 }
