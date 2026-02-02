@@ -22,8 +22,9 @@ export default function Home() {
     const [statusFilter, setStatusFilter] = useState<string | null>(null);
     const [lang, setLang] = useState<'es' | 'en'>('es');
     const [chatMessage, setChatMessage] = useState("");
+    const [isThinking, setIsThinking] = useState(false);
     const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai', content: string }[]>([
-        { role: 'ai', content: 'Hola, soy tu asistente de CRM. ¿En qué puedo ayudarte hoy?' }
+        { role: 'ai', content: 'Hola, soy tu asistente de CRM Inteligente. ¿En qué puedo ayudarte hoy? (Tengo acceso a todos tus leads)' }
     ]);
 
     // Fetch data from Supabase on mount
@@ -184,58 +185,47 @@ export default function Home() {
     };
 
     const handleSendMessage = async () => {
-        if (!chatMessage.trim()) return;
+        if (!chatMessage.trim() || isThinking) return;
 
-        const newHistory = [...chatHistory, { role: 'user' as const, content: chatMessage }];
+        const userText = chatMessage;
+        const newHistory = [...chatHistory, { role: 'user' as const, content: userText }];
         setChatHistory(newHistory);
-        const userMsg = chatMessage.toLowerCase();
         setChatMessage("");
+        setIsThinking(true);
 
-        // Simulated AI Logic (in lieu of real LLM backend)
-        setTimeout(async () => {
-            let aiResponse = "";
+        try {
+            const response = await fetch("/.netlify/functions/chat-assistant", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    messages: newHistory,
+                    lang: lang
+                })
+            });
 
-            // 1. Analysis: Find missing data
-            if (userMsg.includes("faltan") || userMsg.includes("missing") || userMsg.includes("vacío") || userMsg.includes("empty")) {
-                const missingInfoClients = clientsData.filter(c => !c.budget || !c.next_action_date || !c.estimated_travel_date).slice(0, 5);
+            if (!response.ok) throw new Error("API Error");
 
-                if (missingInfoClients.length > 0) {
-                    aiResponse = lang === 'es'
-                        ? `Encontré ${missingInfoClients.length} clientes con datos importantes faltantes (Presupuesto o Fechas). Aquí tienes algunos:\n` + missingInfoClients.map(c => `• ${c.full_name}`).join("\n")
-                        : `I found ${missingInfoClients.length} clients with missing key data (Budget or Dates). Here are a few:\n` + missingInfoClients.map(c => `• ${c.full_name}`).join("\n");
-                } else {
-                    aiResponse = lang === 'es' ? "¡Todo parece estar en orden! No encontré clientes con datos críticos faltantes." : "Everything looks good! I didn't find any clients with critical missing data.";
-                }
-            }
-            // 2. Update: Update status (simple keyword match)
-            else if ((userMsg.includes("actualiza") || userMsg.includes("update")) && (userMsg.includes("hot") || userMsg.includes("caliente"))) {
-                // Try to find client name in message
-                const targetClient = clientsData.find(c => userMsg.toLowerCase().includes(c.full_name.toLowerCase()));
-                if (targetClient) {
-                    // Perform update
-                    const { error } = await supabase.from('crm_clients').update({ tag: '🔥 Hot' }).eq('id', targetClient.id);
-                    if (!error) {
-                        setClientsData(prev => prev.map(c => c.id === targetClient.id ? { ...c, tag: '🔥 Hot' } : c));
-                        aiResponse = lang === 'es' ? `✅ He actualizado a **${targetClient.full_name}** como "Hot Lead".` : `✅ I've updated **${targetClient.full_name}** to "Hot Lead".`;
-                    } else {
-                        aiResponse = "Error updating database.";
-                    }
-                } else {
-                    aiResponse = lang === 'es' ? "No entendí a qué cliente te refieres. Intenta mencionar el nombre exacto." : "I didn't catch the client's name. Try mentioning the exact name.";
-                }
-            }
-            // Default
-            else {
-                aiResponse = lang === 'es'
-                    ? "Puedo ayudarte a encontrar clientes con datos faltantes (escribe 'qué falta') o actualizar clientes a Hot (escribe 'actualiza a [Nombre] a Hot')."
-                    : "I can help you find clients with missing data (type 'what is missing') or update clients to Hot (type 'update [Name] to Hot').";
-            }
+            const data = await response.json();
 
             setChatHistory(prev => [...prev, {
                 role: 'ai',
-                content: aiResponse
+                content: data.content
             }]);
-        }, 600);
+
+            // If an action was taken, re-fetch clients to update UI
+            if (data.actionTaken) {
+                const { data: updatedClients } = await supabase.from('crm_clients').select('*');
+                if (updatedClients) setClientsData(updatedClients as Client[]);
+            }
+
+        } catch (err) {
+            setChatHistory(prev => [...prev, {
+                role: 'ai',
+                content: lang === 'es' ? "Lo siento, hubo un problema conectando con mi cerebro. Revisa tu OPENAI_API_KEY." : "Sorry, I had trouble connecting to my brain. Please check your OPENAI_API_KEY."
+            }]);
+        } finally {
+            setIsThinking(false);
+        }
     };
 
     return (
@@ -323,6 +313,14 @@ export default function Home() {
                                 </div>
                             </div>
                         ))}
+                        {isThinking && (
+                            <div className="flex justify-start">
+                                <div className="bg-white/5 text-white p-4 rounded-2xl rounded-bl-none border border-white/5 flex items-center gap-3">
+                                    <Bot className="w-4 h-4 animate-bounce text-brand-gold" />
+                                    <span className="text-sm opacity-50 italic">{lang === 'es' ? 'Pensando...' : 'Thinking...'}</span>
+                                </div>
+                            </div>
+                        )}
                     </div>
                     <div className="p-4 bg-white/5 border-t border-white/10">
                         <div className="relative">
