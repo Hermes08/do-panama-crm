@@ -16,6 +16,7 @@ export default function Home() {
     const [activeTab, setActiveTab] = useState("dashboard");
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+    const [isCreatingClient, setIsCreatingClient] = useState(false);
     const [statusFilter, setStatusFilter] = useState<string | null>(null);
     const [lang, setLang] = useState<'es' | 'en'>('es');
     const [chatMessage, setChatMessage] = useState("");
@@ -200,6 +201,12 @@ export default function Home() {
                     >
                         {lang.toUpperCase()}
                     </button>
+                    <button
+                        onClick={() => setIsCreatingClient(true)}
+                        className="glass-btn flex items-center gap-2 bg-brand-gold/20 text-brand-gold border-brand-gold/50 hover:bg-brand-gold hover:text-brand-navy"
+                    >
+                        <span>+</span> {lang === 'es' ? 'Nuevo' : 'New'}
+                    </button>
                     <button className="glass-btn flex items-center gap-2">
                         <span>📥</span> {t.buttons.download}
                     </button>
@@ -282,7 +289,8 @@ export default function Home() {
                         {/* Upcoming Months Logic (Mock for now, real sorting later) */}
                         {['2026-02', '2026-03', '2026-04'].map((monthKey, idx) => {
                             // Helper to display clean month name (e.g. "February 2026")
-                            const dateObj = new Date(monthKey + '-01');
+                            // FIX: Append T12:00:00 to prevent timezone rollovers (e.g. Feb 1 becoming Jan 31)
+                            const dateObj = new Date(monthKey + '-01T12:00:00');
                             const displayParams = { month: 'long', year: 'numeric' } as const;
                             const displayName = lang === 'es'
                                 ? dateObj.toLocaleDateString('es-ES', displayParams)
@@ -427,15 +435,21 @@ export default function Home() {
                 </>
             )}
 
-            {/* Lead Details Modal */}
+            {/* LeadDetailsModal */}
             <LeadDetailsModal
-                isOpen={!!selectedClient}
-                onClose={() => setSelectedClient(null)}
+                isOpen={!!selectedClient || isCreatingClient}
+                onClose={() => { setSelectedClient(null); setIsCreatingClient(false); }}
                 client={selectedClient}
                 lang={lang}
                 onClientUpdated={(updatedClient) => {
                     setClientsData(prev => prev.map(c => c.id === updatedClient.id ? updatedClient : c));
-                    setSelectedClient(updatedClient); // Keep modal open with updated data
+                    setSelectedClient(updatedClient);
+                }}
+                onClientCreated={(newClient) => {
+                    setClientsData(prev => [newClient, ...prev]);
+                    setIsCreatingClient(false);
+                    // Optionally open it immediately as selected
+                    setSelectedClient(newClient);
                 }}
             />
         </div>

@@ -9,37 +9,63 @@ interface LeadDetailsModalProps {
     isOpen: boolean;
     onClose: () => void;
     client: Client | null;
-    onClientUpdated: (updatedClient: Client) => void;
+    onClientUpdated?: (updatedClient: Client) => void;
+    onClientCreated?: (newClient: Client) => void;
     lang?: 'es' | 'en';
 }
 
-export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpdated, lang = 'es' }: LeadDetailsModalProps) {
+export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpdated, onClientCreated, lang = 'es' }: LeadDetailsModalProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState<Partial<Client>>({});
     const [saving, setSaving] = useState(false);
 
+    const isNew = !client; // If no client passed, we are creating
+
     useEffect(() => {
-        if (client) {
-            setFormData(client);
-            setIsEditing(false);
+        if (isOpen) {
+            if (client) {
+                setFormData(client);
+                setIsEditing(false);
+            } else {
+                // Initialize default for new client
+                setFormData({
+                    status: 'Prospecto',
+                    tag: 'Mirando',
+                    // Default generic values
+                });
+                setIsEditing(true); // Always editing if new
+            }
         }
     }, [client, isOpen]);
 
-    if (!isOpen || !client) return null;
+    if (!isOpen) return null;
 
     const handleSave = async () => {
         setSaving(true);
         try {
-            const { error } = await supabase
-                .from('crm_clients')
-                .update(formData)
-                .eq('id', client.id);
+            if (isNew) {
+                // CREATE
+                const { data, error } = await supabase
+                    .from('crm_clients')
+                    .insert([{ ...formData }])
+                    .select()
+                    .single();
 
-            if (error) throw error;
+                if (error) throw error;
+                if (onClientCreated && data) onClientCreated(data as Client);
+                onClose();
+            } else {
+                // UPDATE
+                const { error } = await supabase
+                    .from('crm_clients')
+                    .update(formData)
+                    .eq('id', client!.id); // client is safe here because isNew check
 
-            // Notify parent to update state locally
-            onClientUpdated({ ...client, ...formData } as Client);
-            setIsEditing(false);
+                if (error) throw error;
+                // Notify parent to update state locally
+                if (onClientUpdated) onClientUpdated({ ...client, ...formData } as Client);
+                setIsEditing(false);
+            }
         } catch (err) {
             console.error("Error saving client:", err);
             alert("Error al guardar cambios");
@@ -69,12 +95,14 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                         <div className="flex items-center gap-3 mb-2">
                             {isEditing ? (
                                 <input
-                                    className="bg-white/10 border border-white/20 rounded px-2 py-1 text-2xl font-bold text-white font-heading w-full"
+                                    className="bg-white/10 border border-white/20 rounded px-2 py-1 text-2xl font-bold text-white font-heading w-full placeholder:text-white/30"
                                     value={formData.full_name || ""}
                                     onChange={(e) => handleChange('full_name', e.target.value)}
+                                    placeholder={lang === 'es' ? "Nombre del Cliente..." : "Client Name..."}
+                                    autoFocus
                                 />
                             ) : (
-                                <h2 className="text-2xl font-bold text-white font-heading">{client.full_name}</h2>
+                                <h2 className="text-2xl font-bold text-white font-heading">{client?.full_name}</h2>
                             )}
 
                             {isEditing ? (
@@ -92,13 +120,13 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                                     <option value="Cierre">Cierre</option>
                                 </select>
                             ) : (
-                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${client.tag?.includes("Hot") ? "bg-brand-gold text-brand-navy" : "bg-white/10 text-white"}`}>
-                                    {client.tag || "Sin etiqueta"}
+                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${client?.tag?.includes("Hot") ? "bg-brand-gold text-brand-navy" : "bg-white/10 text-white"}`}>
+                                    {client?.tag || "Sin etiqueta"}
                                 </span>
                             )}
                         </div>
                         <p className="text-white/60 text-sm flex items-center gap-2">
-                            <span className="font-mono text-xs opacity-50">{client.id}</span>
+                            <span className="font-mono text-xs opacity-50">{isNew ? 'NEW' : client?.id}</span>
                             <span>•</span>
                             {isEditing ? (
                                 <select
@@ -110,16 +138,17 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                                     <option value=" Pendiente respuesta">{lang === 'es' ? 'Pendiente respuesta' : 'Pending Reply'}</option>
                                     <option value=" No seguimiento">{lang === 'es' ? 'No seguimiento' : 'No Follow Up'}</option>
                                     <option value="Cliente activo">{lang === 'es' ? 'Cliente activo' : 'Active Client'}</option>
-                                    <option value="En Cierre">{lang === 'es' ? 'En Cierre' : 'Closing Process'}</option>
+                                    <option value="Cerrando">{lang === 'es' ? 'Cerrando' : 'Closing Process'}</option>
+                                    <option value="Cerrado">{lang === 'es' ? 'Cerrado' : 'Closed / Won'}</option>
                                     <option value="Prospecto">{lang === 'es' ? 'Prospecto' : 'Prospect'}</option>
                                 </select>
                             ) : (
-                                <span className="text-brand-gold/80">{client.status}</span>
+                                <span className="text-brand-gold/80">{client?.status}</span>
                             )}
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        {!isEditing ? (
+                        {!isEditing && !isNew ? (
                             <button
                                 onClick={() => setIsEditing(true)}
                                 className="p-2 hover:bg-white/10 rounded-lg transition-colors text-brand-gold hover:text-white"
@@ -161,7 +190,7 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                                         onChange={(e) => handleChange('zone_project', e.target.value)}
                                     />
                                 ) : (
-                                    <p className="font-medium">{client.zone_project || "No especificado"}</p>
+                                    <p className="font-medium">{client?.zone_project || "No especificado"}</p>
                                 )}
                             </div>
                         </div>
@@ -177,7 +206,7 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                                         onChange={(e) => handleChange('interest_category', e.target.value)}
                                     />
                                 ) : (
-                                    <p className="font-medium">{client.interest_category || "No especificado"}</p>
+                                    <p className="font-medium">{client?.interest_category || "No especificado"}</p>
                                 )}
                             </div>
                         </div>
@@ -193,7 +222,7 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                                         onChange={(e) => handleChange('budget', e.target.value)}
                                     />
                                 ) : (
-                                    <p className="font-medium">{client.budget ? `$${client.budget}` : "No definido"}</p>
+                                    <p className="font-medium">{client?.budget ? `$${client.budget}` : "No definido"}</p>
                                 )}
                             </div>
                         </div>
@@ -209,7 +238,7 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                                         onChange={(e) => handleChange('assigned_to', e.target.value)}
                                     />
                                 ) : (
-                                    <p className="font-medium">{client.assigned_to || "Sin asignar"}</p>
+                                    <p className="font-medium">{client?.assigned_to || "Sin asignar"}</p>
                                 )}
                             </div>
                         </div>
@@ -231,7 +260,7 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                                         onChange={(e) => handleChange('last_contact_date', e.target.value)}
                                     />
                                 ) : (
-                                    <p>{client.last_contact_date || "-"}</p>
+                                    <p>{client?.last_contact_date || "-"}</p>
                                 )}
                             </div>
                             <div>
@@ -253,8 +282,8 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                                     </div>
                                 ) : (
                                     <>
-                                        <p className="text-brand-gold/80 mb-1">{client.next_action || "Ninguna"}</p>
-                                        <p className="text-brand-gold font-bold">{client.next_action_date || "Pendiente"}</p>
+                                        <p className="text-brand-gold/80 mb-1">{client?.next_action || "Ninguna"}</p>
+                                        <p className="text-brand-gold font-bold">{client?.next_action_date || "Pendiente"}</p>
                                     </>
                                 )}
                             </div>
@@ -267,7 +296,7 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                                         onChange={(e) => handleChange('estimated_travel_date', e.target.value)}
                                     />
                                 ) : (
-                                    <p className="text-blue-300">{client.estimated_travel_date || "-"}</p>
+                                    <p className="text-blue-300">{client?.estimated_travel_date || "-"}</p>
                                 )}
                             </div>
                         </div>
@@ -286,7 +315,7 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                             />
                         ) : (
                             <div className="prose prose-invert prose-sm max-w-none text-white/70 whitespace-pre-wrap font-light">
-                                {client.detailed_notes || "No hay notas adicionales."}
+                                {client?.detailed_notes || "No hay notas adicionales."}
                             </div>
                         )}
                     </div>
