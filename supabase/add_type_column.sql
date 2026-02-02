@@ -1,0 +1,1 @@
+ALTER TABLE crm_clients ADD COLUMN IF NOT EXISTS type TEXT;
