@@ -14,62 +14,57 @@ export default function AnimatedBackground({ theme = "cityHorizon", onThemeChang
     const config = backgroundThemes[currentTheme];
 
     useEffect(() => {
-        createParticles();
-        create3DShapes();
-        if (config.buildings) {
-            createCityBuildings();
+        clearBackground();
+
+        switch (config.type) {
+            case "city":
+                createCityBackground();
+                break;
+            case "waves":
+                createWavesBackground();
+                break;
+            case "hexagons":
+                createHexagonsBackground();
+                break;
+            case "circuit":
+                createCircuitBackground();
+                break;
+            case "helix":
+                createHelixBackground();
+                break;
+            case "stars":
+                createStarsBackground();
+                break;
+            case "rain":
+                createRainBackground();
+                break;
+            case "aurora":
+                createAuroraBackground();
+                break;
+            case "triangles":
+                createTrianglesBackground();
+                break;
+            case "network":
+                createNetworkBackground();
+                break;
         }
     }, [currentTheme]);
+
+    const clearBackground = () => {
+        const container = document.getElementById('bg-container');
+        if (container) container.innerHTML = '';
+    };
 
     const handleThemeChange = (newTheme: BackgroundTheme) => {
         setCurrentTheme(newTheme);
         onThemeChange?.(newTheme);
         setShowSelector(false);
-
-        // Clear and recreate elements
-        const particles = document.getElementById('particles');
-        const shapes = document.getElementById('shapes');
-        const buildings = document.getElementById('buildings');
-        if (particles) particles.innerHTML = '';
-        if (shapes) shapes.innerHTML = '';
-        if (buildings) buildings.innerHTML = '';
     };
 
     return (
         <>
             <div className="crm-background" style={{ background: config.gradient }}>
-                {/* Radial Blur Effects */}
-                {config.blurs.map((blur, index) => (
-                    <div
-                        key={`blur-${index}`}
-                        className="radial-blur"
-                        style={{
-                            background: `radial-gradient(circle, ${blur.color}, transparent)`,
-                            ...blur.position,
-                        }}
-                    />
-                ))}
-
-                {/* Animated Grid */}
-                <div
-                    className="animated-grid"
-                    style={{
-                        backgroundImage: `
-              linear-gradient(${config.grid.color} 1px, transparent 1px),
-              linear-gradient(90deg, ${config.grid.color} 1px, transparent 1px)
-            `,
-                        backgroundSize: `${config.grid.size} ${config.grid.size}`,
-                    }}
-                />
-
-                {/* City Buildings (if enabled) */}
-                {config.buildings && <div className="city-buildings" id="buildings" />}
-
-                {/* Particles Container */}
-                <div className="particles-layer" id="particles" />
-
-                {/* 3D Shapes Container */}
-                <div className="geometric-shapes" id="shapes" />
+                <div id="bg-container" className="absolute inset-0 overflow-hidden" />
             </div>
 
             {/* Theme Selector Button */}
@@ -107,74 +102,333 @@ export default function AnimatedBackground({ theme = "cityHorizon", onThemeChang
     );
 }
 
-// Generate random particles
-function createParticles() {
-    const particlesContainer = document.getElementById('particles');
-    if (!particlesContainer) return;
+// 1. City with buildings and particles
+function createCityBackground() {
+    const container = document.getElementById('bg-container');
+    if (!container) return;
 
-    const particleCount = window.innerWidth < 768 ? 20 : 50;
-
-    for (let i = 0; i < particleCount; i++) {
-        const particle = document.createElement('div');
-        particle.className = 'particle';
-
-        particle.style.left = Math.random() * 100 + 'vw';
-        particle.style.top = Math.random() * 100 + 'vh';
-
-        const size = Math.random() * 30 + 10;
-        particle.style.width = size + 'px';
-        particle.style.height = size + 'px';
-
-        particle.style.animationDuration = (Math.random() * 10 + 15) + 's';
-        particle.style.animationDelay = Math.random() * 5 + 's';
-
-        particlesContainer.appendChild(particle);
-    }
-}
-
-// Generate 3D cubes
-function create3DShapes() {
-    const shapesContainer = document.getElementById('shapes');
-    if (!shapesContainer) return;
-
-    const shapeCount = window.innerWidth < 768 ? 8 : 15;
-
-    for (let i = 0; i < shapeCount; i++) {
-        const cube = document.createElement('div');
-        cube.className = 'cube-3d';
-
-        cube.style.left = Math.random() * 90 + '%';
-        cube.style.top = Math.random() * 90 + '%';
-
-        const size = Math.random() * 60 + 40;
-        cube.style.width = size + 'px';
-        cube.style.height = size + 'px';
-
-        cube.style.animationDuration = (Math.random() * 15 + 15) + 's';
-
-        shapesContainer.appendChild(cube);
-    }
-}
-
-// Create city skyline buildings
-function createCityBuildings() {
-    const buildingsContainer = document.getElementById('buildings');
-    if (!buildingsContainer) return;
-
-    const buildingCount = window.innerWidth < 768 ? 8 : 15;
-
-    for (let i = 0; i < buildingCount; i++) {
+    // Buildings
+    for (let i = 0; i < 15; i++) {
         const building = document.createElement('div');
         building.className = 'city-building';
-
-        const width = Math.random() * 60 + 40;
-        const height = Math.random() * 150 + 100;
-
-        building.style.width = width + 'px';
-        building.style.height = height + 'px';
-        building.style.left = (i * (100 / buildingCount)) + '%';
-        building.style.bottom = '0';
-
-        buildingsContainer.appendChild(building);
+        building.style.left = (i * 7) + '%';
+        building.style.width = Math.random() * 60 + 40 + 'px';
+        building.style.height = Math.random() * 150 + 100 + 'px';
+        container.appendChild(building);
     }
+
+    // Particles
+    for (let i = 0; i < 30; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'floating-particle';
+        particle.style.left = Math.random() * 100 + '%';
+        particle.style.top = Math.random() * 100 + '%';
+        particle.style.animationDuration = (Math.random() * 10 + 15) + 's';
+        container.appendChild(particle);
+    }
+}
+
+// 2. Animated waves
+function createWavesBackground() {
+    const container = document.getElementById('bg-container');
+    if (!container) return;
+
+    for (let i = 0; i < 4; i++) {
+        const wave = document.createElement('div');
+        wave.className = 'ocean-wave';
+        wave.style.animationDuration = (15 + i * 5) + 's';
+        wave.style.animationDelay = (i * 2) + 's';
+        wave.style.bottom = (i * 15) + '%';
+        container.appendChild(wave);
+    }
+}
+
+// 3. Hexagonal grid
+function createHexagonsBackground() {
+    const container = document.getElementById('bg-container');
+    if (!container) return;
+
+    const rows = 8;
+    const cols = 12;
+
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const hex = document.createElement('div');
+            hex.className = 'hexagon';
+            hex.style.left = (col * 70 + (row % 2) * 35) + 'px';
+            hex.style.top = (row * 60) + 'px';
+            hex.style.animationDelay = (Math.random() * 5) + 's';
+            container.appendChild(hex);
+        }
+    }
+}
+
+// 4. Circuit board
+function createCircuitBackground() {
+    const container = document.getElementById('bg-container');
+    if (!container) return;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '100%');
+    svg.className = 'circuit-svg';
+
+    for (let i = 0; i < 20; i++) {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', Math.random() * 100 + '%');
+        line.setAttribute('y1', Math.random() * 100 + '%');
+        line.setAttribute('x2', Math.random() * 100 + '%');
+        line.setAttribute('y2', Math.random() * 100 + '%');
+        line.setAttribute('stroke', 'rgba(0, 255, 65, 0.3)');
+        line.setAttribute('stroke-width', '2');
+        line.className = 'circuit-line';
+        svg.appendChild(line);
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', Math.random() * 100 + '%');
+        circle.setAttribute('cy', Math.random() * 100 + '%');
+        circle.setAttribute('r', '4');
+        circle.setAttribute('fill', 'rgba(0, 255, 65, 0.6)');
+        circle.className = 'circuit-node';
+        svg.appendChild(circle);
+    }
+
+    container.appendChild(svg);
+}
+
+// 5. DNA Helix
+function createHelixBackground() {
+    const container = document.getElementById('bg-container');
+    if (!container) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    canvas.className = 'helix-canvas';
+    container.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let angle = 0;
+    function animateHelix() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 50; i++) {
+            const y = (i / 50) * canvas.height;
+            const x1 = canvas.width / 2 + Math.sin(angle + i * 0.2) * 100;
+            const x2 = canvas.width / 2 + Math.sin(angle + i * 0.2 + Math.PI) * 100;
+
+            ctx.fillStyle = 'rgba(212, 175, 55, 0.4)';
+            ctx.beginPath();
+            ctx.arc(x1, y, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
+            ctx.beginPath();
+            ctx.arc(x2, y, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = 'rgba(212, 175, 55, 0.2)';
+            ctx.beginPath();
+            ctx.moveTo(x1, y);
+            ctx.lineTo(x2, y);
+            ctx.stroke();
+        }
+
+        angle += 0.02;
+        requestAnimationFrame(animateHelix);
+    }
+    animateHelix();
+}
+
+// 6. Constellation / Stars
+function createStarsBackground() {
+    const container = document.getElementById('bg-container');
+    if (!container) return;
+
+    const stars: { x: number, y: number, el: HTMLElement }[] = [];
+
+    for (let i = 0; i < 100; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        const x = Math.random() * 100;
+        const y = Math.random() * 100;
+        star.style.left = x + '%';
+        star.style.top = y + '%';
+        container.appendChild(star);
+        stars.push({ x, y, el: star });
+    }
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '100%');
+    svg.className = 'constellation-svg';
+    svg.style.position = 'absolute';
+    svg.style.top = '0';
+    svg.style.left = '0';
+
+    for (let i = 0; i < stars.length; i++) {
+        for (let j = i + 1; j < stars.length; j++) {
+            const dist = Math.sqrt(Math.pow(stars[i].x - stars[j].x, 2) + Math.pow(stars[i].y - stars[j].y, 2));
+            if (dist < 15) {
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', stars[i].x + '%');
+                line.setAttribute('y1', stars[i].y + '%');
+                line.setAttribute('x2', stars[j].x + '%');
+                line.setAttribute('y2', stars[j].y + '%');
+                line.setAttribute('stroke', 'rgba(100, 200, 255, 0.2)');
+                line.setAttribute('stroke-width', '1');
+                svg.appendChild(line);
+            }
+        }
+    }
+
+    container.appendChild(svg);
+}
+
+// 7. Matrix Rain
+function createRainBackground() {
+    const container = document.getElementById('bg-container');
+    if (!container) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    canvas.className = 'matrix-canvas';
+    container.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const chars = '01アイウエオカキクケコサシスセソタチツテト'.split('');
+    const fontSize = 14;
+    const columns = canvas.width / fontSize;
+    const drops: number[] = [];
+
+    for (let i = 0; i < columns; i++) {
+        drops[i] = Math.random() * -100;
+    }
+
+    function drawMatrix() {
+        ctx.fillStyle = 'rgba(0, 10, 0, 0.05)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = 'rgba(0, 255, 65, 0.8)';
+        ctx.font = fontSize + 'px monospace';
+
+        for (let i = 0; i < drops.length; i++) {
+            const text = chars[Math.floor(Math.random() * chars.length)];
+            ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+            if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                drops[i] = 0;
+            }
+            drops[i]++;
+        }
+    }
+
+    setInterval(drawMatrix, 50);
+}
+
+// 8. Aurora
+function createAuroraBackground() {
+    const container = document.getElementById('bg-container');
+    if (!container) return;
+
+    for (let i = 0; i < 4; i++) {
+        const aurora = document.createElement('div');
+        aurora.className = 'aurora-wave';
+        aurora.style.animationDuration = (8 + i * 2) + 's';
+        aurora.style.animationDelay = (i * 1.5) + 's';
+        aurora.style.top = (20 + i * 15) + '%';
+        container.appendChild(aurora);
+    }
+}
+
+// 9. Geometric Triangles
+function createTrianglesBackground() {
+    const container = document.getElementById('bg-container');
+    if (!container) return;
+
+    for (let i = 0; i < 15; i++) {
+        const triangle = document.createElement('div');
+        triangle.className = 'geo-triangle';
+        triangle.style.left = Math.random() * 100 + '%';
+        triangle.style.top = Math.random() * 100 + '%';
+        triangle.style.animationDuration = (15 + Math.random() * 10) + 's';
+        triangle.style.animationDelay = Math.random() * 5 + 's';
+        container.appendChild(triangle);
+    }
+}
+
+// 10. Neural Network
+function createNetworkBackground() {
+    const container = document.getElementById('bg-container');
+    if (!container) return;
+
+    const nodes: { x: number, y: number, vx: number, vy: number, el: HTMLElement }[] = [];
+
+    for (let i = 0; i < 40; i++) {
+        const node = document.createElement('div');
+        node.className = 'network-node';
+        const x = Math.random() * 100;
+        const y = Math.random() * 100;
+        node.style.left = x + '%';
+        node.style.top = y + '%';
+        container.appendChild(node);
+        nodes.push({
+            x,
+            y,
+            vx: (Math.random() - 0.5) * 0.1,
+            vy: (Math.random() - 0.5) * 0.1,
+            el: node
+        });
+    }
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '100%');
+    svg.className = 'network-svg';
+    svg.style.position = 'absolute';
+    svg.style.top = '0';
+    svg.style.left = '0';
+    container.appendChild(svg);
+
+    function animateNetwork() {
+        svg.innerHTML = '';
+
+        nodes.forEach(node => {
+            node.x += node.vx;
+            node.y += node.vy;
+
+            if (node.x < 0 || node.x > 100) node.vx *= -1;
+            if (node.y < 0 || node.y > 100) node.vy *= -1;
+
+            node.el.style.left = node.x + '%';
+            node.el.style.top = node.y + '%';
+        });
+
+        for (let i = 0; i < nodes.length; i++) {
+            let connections = 0;
+            for (let j = i + 1; j < nodes.length; j++) {
+                if (connections >= 3) break;
+                const dist = Math.sqrt(Math.pow(nodes[i].x - nodes[j].x, 2) + Math.pow(nodes[i].y - nodes[j].y, 2));
+                if (dist < 20) {
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', nodes[i].x + '%');
+                    line.setAttribute('y1', nodes[i].y + '%');
+                    line.setAttribute('x2', nodes[j].x + '%');
+                    line.setAttribute('y2', nodes[j].y + '%');
+                    line.setAttribute('stroke', 'rgba(0, 242, 234, 0.2)');
+                    line.setAttribute('stroke-width', '1');
+                    svg.appendChild(line);
+                    connections++;
+                }
+            }
+        }
+
+        requestAnimationFrame(animateNetwork);
+    }
+    animateNetwork();
 }

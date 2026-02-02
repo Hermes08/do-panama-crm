@@ -15,7 +15,6 @@ interface PropertyData {
 }
 
 export const handler: Handler = async (event: HandlerEvent) => {
-    // CORS headers
     const headers = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Content-Type",
@@ -45,34 +44,24 @@ export const handler: Handler = async (event: HandlerEvent) => {
             };
         }
 
-        // Fetch the HTML
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        });
         const html = await response.text();
         const $ = cheerio.load(html);
 
-        let propertyData: PropertyData = {
-            title: "",
-            price: "",
-            location: "",
-            description: "",
-            features: [],
-            images: [],
-            source: new URL(url).hostname,
-        };
+        let propertyData: PropertyData;
 
-        // Scrape based on source
         if (url.includes("mlsacobir.com")) {
-            propertyData = scrapeMLS($, url);
+            propertyData = scrapeMLS($, url, html);
         } else if (url.includes("encuentra24.com")) {
-            propertyData = scrapeEncuentra24($, url);
+            propertyData = scrapeEncuentra24($, url, html);
         } else if (url.includes("jamesedition.com")) {
-            propertyData = scrapeJamesEdition($, url);
+            propertyData = scrapeJamesEdition($, url, html);
         } else {
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: "Unsupported property source" }),
-            };
+            propertyData = scrapeGeneric($, url, html);
         }
 
         return {
@@ -93,59 +82,130 @@ export const handler: Handler = async (event: HandlerEvent) => {
     }
 };
 
-function scrapeMLS($: ReturnType<typeof cheerio.load>, url: string): PropertyData {
-    // Try multiple selectors for better data extraction
-    const title = $("h1, .property-title, .listing-title, [class*='title']").first().text().trim() || "Property Listing";
+// Helper function to extract data from entire HTML
+function extractFromHTML(html: string, pattern: RegExp): string | null {
+    const match = html.match(pattern);
+    return match ? match[0] : null;
+}
 
-    const price = $(".price, .listing-price, [class*='price'], [class*='Price']").first().text().trim() ||
-        $("span:contains('$'), div:contains('$')").first().text().trim() || "Price on Request";
+// Generic scraper that works for any property site
+function scrapeGeneric($: ReturnType<typeof cheerio.load>, url: string, html: string): PropertyData {
+    // Title - try h1, then any heading, then meta tags
+    let title = $("h1").first().text().trim();
+    if (!title) title = $("h2, h3").first().text().trim();
+    if (!title) title = $('meta[property="og:title"]').attr("content") || "";
+    if (!title) title = $("title").text().trim();
 
-    const location = $(".location, .property-location, [class*='location'], .address, [class*='address']").first().text().trim() ||
-        $("span:contains('Panama'), div:contains('Panama')").first().text().trim() || "Panama";
+    // Price - scan entire HTML for price patterns
+    let price = "";
+    const pricePatterns = [
+        /\$[\d,]+(?:\.\d{2})?/,
+        /USD[\s]?[\d,]+/i,
+        /US\$[\d,]+/,
+        /Precio[:\s]+\$?[\d,]+/i,
+        /Price[:\s]+\$?[\d,]+/i
+    ];
 
-    // Extract bedrooms with multiple patterns
-    let bedrooms = $(".bedrooms, [class*='bed'], [class*='Bed']").first().text().trim();
-    if (!bedrooms) {
-        const bedroomMatch = $.html().match(/(\d+)\s*(bed|bedroom|habitaci)/i);
-        bedrooms = bedroomMatch ? bedroomMatch[1] + " beds" : "";
+    for (const pattern of pricePatterns) {
+        const match = html.match(pattern);
+        if (match) {
+            price = match[0];
+            break;
+        }
+    }
+    if (!price) price = "Contact for Price";
+
+    // Location - try multiple selectors and meta tags
+    let location = $('[class*="location"], [class*="address"], [class*="ubicacion"]').first().text().trim();
+    if (!location) location = $('meta[property="og:locality"]').attr("content") || "";
+    if (!location) {
+        const locationMatch = html.match(/Panamá|Panama City|Costa del Este|Punta Pacifica|San Francisco|El Cangrejo/i);
+        location = locationMatch ? locationMatch[0] : "Panama";
     }
 
-    // Extract bathrooms
-    let bathrooms = $(".bathrooms, [class*='bath'], [class*='Bath']").first().text().trim();
-    if (!bathrooms) {
-        const bathroomMatch = $.html().match(/(\d+\.?\d*)\s*(bath|baño)/i);
-        bathrooms = bathroomMatch ? bathroomMatch[1] + " baths" : "";
+    // Bedrooms - scan for patterns
+    let bedrooms = "";
+    const bedroomPatterns = [
+        /(\d+)\s*(?:bed|bedroom|habitacion|recamara|cuarto)/i,
+        /(?:bed|bedroom|habitacion)[:\s]*(\d+)/i
+    ];
+    for (const pattern of bedroomPatterns) {
+        const match = html.match(pattern);
+        if (match) {
+            bedrooms = match[1] + " beds";
+            break;
+        }
     }
 
-    // Extract area
-    let area = $(".area, .square-feet, [class*='sqft'], [class*='m2'], [class*='area']").first().text().trim();
-    if (!area) {
-        const areaMatch = $.html().match(/(\d+[,\d]*)\s*(m2|sqft|sq ft)/i);
-        area = areaMatch ? areaMatch[0] : "";
+    // Bathrooms - scan for patterns
+    let bathrooms = "";
+    const bathroomPatterns = [
+        /(\d+(?:\.\d+)?)\s*(?:bath|bathroom|baño)/i,
+        /(?:bath|bathroom|baño)[:\s]*(\d+(?:\.\d+)?)/i
+    ];
+    for (const pattern of bathroomPatterns) {
+        const match = html.match(pattern);
+        if (match) {
+            bathrooms = match[1] + " baths";
+            break;
+        }
     }
 
-    // Description - try multiple selectors
-    const description = $(".description, .property-description, [class*='description'], p").filter((_, el) => {
-        const text = $(el).text();
-        return text.length > 100; // Get longest paragraph
-    }).first().text().trim() || "Luxury property in Panama";
+    // Area - scan for patterns
+    let area = "";
+    const areaPatterns = [
+        /(\d+[,\d]*)\s*(?:m2|m²|sq\.?\s*ft|sqft|square\s*(?:feet|meters))/i,
+        /(?:area|superficie)[:\s]*(\d+[,\d]*)\s*(?:m2|m²)/i
+    ];
+    for (const pattern of areaPatterns) {
+        const match = html.match(pattern);
+        if (match) {
+            area = match[0];
+            break;
+        }
+    }
 
+    // Description - get longest paragraph
+    let description = "";
+    let maxLength = 0;
+    $("p").each((_, el) => {
+        const text = $(el).text().trim();
+        if (text.length > maxLength && text.length > 100) {
+            maxLength = text.length;
+            description = text;
+        }
+    });
+    if (!description) description = $('meta[property="og:description"]').attr("content") || "Luxury property in Panama";
+
+    // Features - extract from lists and common patterns
     const features: string[] = [];
-    $(".features li, .amenities li, ul li, [class*='feature'] li").each((_, el) => {
-        const feature = $(el).text().trim();
-        if (feature && feature.length > 3 && feature.length < 100 &&
-            !feature.toLowerCase().includes("contacto") &&
-            !feature.toLowerCase().includes("agente") &&
-            !feature.toLowerCase().includes("whatsapp")) {
-            features.push(feature);
+    $("li, [class*='feature'], [class*='amenity'], [class*='caracteristica']").each((_, el) => {
+        const text = $(el).text().trim();
+        if (text && text.length > 3 && text.length < 100 &&
+            !text.toLowerCase().includes("contacto") &&
+            !text.toLowerCase().includes("agente") &&
+            !text.toLowerCase().includes("whatsapp") &&
+            !text.toLowerCase().includes("email")) {
+            if (!features.includes(text)) {
+                features.push(text);
+            }
         }
     });
 
+    // Images - get all images that look like property photos
     const images: string[] = [];
     $("img").each((_, el) => {
         const src = $(el).attr("src") || $(el).attr("data-src") || $(el).attr("data-lazy");
-        if (src && !src.includes("logo") && !src.includes("avatar") && !src.includes("icon") &&
-            (src.includes("property") || src.includes("photo") || src.includes("image") || src.includes("img"))) {
+        const alt = $(el).attr("alt") || "";
+
+        if (src &&
+            !src.includes("logo") &&
+            !src.includes("icon") &&
+            !src.includes("avatar") &&
+            !src.includes("placeholder") &&
+            (src.includes("property") || src.includes("photo") || src.includes("image") ||
+                src.includes("img") || alt.toLowerCase().includes("property") ||
+                src.match(/\.(jpg|jpeg|png|webp)/i))) {
             const fullSrc = src.startsWith("http") ? src : new URL(src, url).href;
             if (!images.includes(fullSrc)) {
                 images.push(fullSrc);
@@ -153,86 +213,34 @@ function scrapeMLS($: ReturnType<typeof cheerio.load>, url: string): PropertyDat
         }
     });
 
-    return { title, price, location, bedrooms, bathrooms, area, description, features, images, source: "MLS ACOBIR" };
+    return {
+        title: title || "Property Listing",
+        price,
+        location,
+        bedrooms,
+        bathrooms,
+        area,
+        description,
+        features: features.slice(0, 20),
+        images: images.slice(0, 15),
+        source: new URL(url).hostname
+    };
 }
 
-function scrapeEncuentra24($: ReturnType<typeof cheerio.load>, url: string): PropertyData {
-    const title = $("h1, [class*='title'], .ad-title").first().text().trim() || "Property for Sale";
-    const price = $("[class*='price'], [class*='Price']").first().text().trim() || "Contact for Price";
-    const location = $("[class*='location'], .breadcrumb, [class*='address']").first().text().trim() || "Panama";
-
-    let bedrooms = $("[class*='bedroom'], [data-cy='bedrooms'], [class*='Bed']").first().text().trim();
-    if (!bedrooms) {
-        const match = $.html().match(/(\d+)\s*(hab|bed|rec)/i);
-        bedrooms = match ? match[1] + " beds" : "";
-    }
-
-    let bathrooms = $("[class*='bathroom'], [data-cy='bathrooms'], [class*='Bath']").first().text().trim();
-    if (!bathrooms) {
-        const match = $.html().match(/(\d+\.?\d*)\s*(baño|bath)/i);
-        bathrooms = match ? match[1] + " baths" : "";
-    }
-
-    let area = $("[class*='area'], [class*='m2'], [class*='superficie']").first().text().trim();
-    if (!area) {
-        const match = $.html().match(/(\d+[,\d]*)\s*m2/i);
-        area = match ? match[0] : "";
-    }
-
-    const description = $("[class*='description'], .ad-description, [class*='desc'], p").filter((_, el) => {
-        return $(el).text().length > 100;
-    }).first().text().trim() || "Beautiful property in Panama";
-
-    const features: string[] = [];
-    $("[class*='feature'] li, .characteristics li, ul li").each((_, el) => {
-        const feature = $(el).text().trim();
-        if (feature && feature.length > 3 && feature.length < 100 &&
-            !feature.toLowerCase().includes("contacto") &&
-            !feature.toLowerCase().includes("agente") &&
-            !feature.toLowerCase().includes("whatsapp")) {
-            features.push(feature);
-        }
-    });
-
-    const images: string[] = [];
-    $("img").each((_, el) => {
-        const src = $(el).attr("src") || $(el).attr("data-src") || $(el).attr("data-lazy");
-        if (src && !src.includes("logo") && !src.includes("icon") &&
-            (src.includes("photo") || src.includes("image") || src.includes("img") || src.includes("property"))) {
-            const fullSrc = src.startsWith("http") ? src : new URL(src, url).href;
-            if (!images.includes(fullSrc)) {
-                images.push(fullSrc);
-            }
-        }
-    });
-
-    return { title, price, location, bedrooms, bathrooms, area, description, features, images, source: "Encuentra24" };
+function scrapeMLS($: ReturnType<typeof cheerio.load>, url: string, html: string): PropertyData {
+    const generic = scrapeGeneric($, url, html);
+    generic.source = "MLS ACOBIR";
+    return generic;
 }
 
-function scrapeJamesEdition($: ReturnType<typeof cheerio.load>, url: string): PropertyData {
-    const title = $("h1.listing-title, h1[class*='title']").first().text().trim();
-    const price = $(".price, [class*='price']").first().text().trim();
-    const location = $(".location, [class*='location']").first().text().trim();
-    const bedrooms = $("[class*='bedroom']").first().text().trim();
-    const bathrooms = $("[class*='bathroom']").first().text().trim();
-    const area = $("[class*='area'], [class*='size']").first().text().trim();
-    const description = $(".description, [class*='description']").first().text().trim();
+function scrapeEncuentra24($: ReturnType<typeof cheerio.load>, url: string, html: string): PropertyData {
+    const generic = scrapeGeneric($, url, html);
+    generic.source = "Encuentra24";
+    return generic;
+}
 
-    const features: string[] = [];
-    $(".features li, .amenities li").each((_, el) => {
-        const feature = $(el).text().trim();
-        if (feature) {
-            features.push(feature);
-        }
-    });
-
-    const images: string[] = [];
-    $("img[class*='listing'], .gallery img").each((_, el) => {
-        const src = $(el).attr("src") || $(el).attr("data-src");
-        if (src && !src.includes("logo")) {
-            images.push(src.startsWith("http") ? src : new URL(src, url).href);
-        }
-    });
-
-    return { title, price, location, bedrooms, bathrooms, area, description, features, images, source: "James Edition" };
+function scrapeJamesEdition($: ReturnType<typeof cheerio.load>, url: string, html: string): PropertyData {
+    const generic = scrapeGeneric($, url, html);
+    generic.source = "James Edition";
+    return generic;
 }
