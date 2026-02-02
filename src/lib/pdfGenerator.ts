@@ -35,7 +35,7 @@ async function loadImageAsDataURL(url: string): Promise<string> {
 export async function generatePropertyPDF(
     propertyData: PropertyData,
     customImages: string[]
-): Promise<void> {
+): Promise<Blob> {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -271,6 +271,6 @@ export async function generatePropertyPDF(
         }
     }
 
-    // Save PDF
-    doc.save(`${propertyData.title.substring(0, 30).replace(/[^a-z0-9]/gi, "_")}_Property.pdf`);
+    // Return PDF as Blob for preview
+    return doc.output("blob");
 }
