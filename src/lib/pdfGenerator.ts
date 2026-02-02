@@ -58,9 +58,7 @@ export async function generatePropertyPDF(
     const cardY = H * 0.55;
     const cardH = 65;
     doc.setFillColor(255, 255, 255);
-    doc.setGState(new doc.GState({ opacity: 0.92 }));
     doc.roundedRect(15, cardY, W - 30, cardH, 4, 4, "F");
-    doc.setGState(new doc.GState({ opacity: 1 }));
 
     doc.setDrawColor(0, 188, 212);
     doc.setLineWidth(0.4);
@@ -93,9 +91,7 @@ export async function generatePropertyPDF(
     const drawPill = (x: number, icon: string, val: string) => {
         if (!val) return;
         doc.setFillColor(255, 255, 255);
-        doc.setGState(new doc.GState({ opacity: 0.8 }));
         doc.roundedRect(x, statsY, pillW, 14, 2, 2, "F");
-        doc.setGState(new doc.GState({ opacity: 1 }));
         doc.setDrawColor(0, 188, 212);
         doc.setLineWidth(0.2);
         doc.roundedRect(x, statsY, pillW, 14, 2, 2, "S");
@@ -128,11 +124,9 @@ export async function generatePropertyPDF(
     y += 10;
 
     doc.setFillColor(255, 255, 255);
-    doc.setGState(new doc.GState({ opacity: 0.75 }));
     const descLines = doc.splitTextToSize(propertyData.description, W - 40);
     const descH = Math.min(descLines.length * 5 + 12, 50);
     doc.roundedRect(15, y - 5, W - 30, descH, 3, 3, "F");
-    doc.setGState(new doc.GState({ opacity: 1 }));
     doc.setDrawColor(0, 188, 212);
     doc.setLineWidth(0.2);
     doc.roundedRect(15, y - 5, W - 30, descH, 3, 3, "S");
@@ -158,9 +152,7 @@ export async function generatePropertyPDF(
         const gridH = rows * 8 + 10;
 
         doc.setFillColor(255, 255, 255);
-        doc.setGState(new doc.GState({ opacity: 0.65 }));
         doc.roundedRect(15, y - 5, W - 30, gridH, 3, 3, "F");
-        doc.setGState(new doc.GState({ opacity: 1 }));
         doc.setDrawColor(0, 188, 212);
         doc.setLineWidth(0.2);
         doc.roundedRect(15, y - 5, W - 30, gridH, 3, 3, "S");
