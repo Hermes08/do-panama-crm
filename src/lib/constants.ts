@@ -3,7 +3,7 @@ export const BUYER_TYPES = [
     {
         id: "exclusive_client",
         label: "Exclusive Client (VIP Treatment)",
-        description: "I want you to be my exclusive realtor... while I am in Panama you only work for me."
+        description: "I want you to be my exclusive realtor... during my stay in Panama I am here to buy, not to waste time. You only work for me."
     },
     {
         id: "home_seller",
