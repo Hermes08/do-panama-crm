@@ -24,13 +24,13 @@ export function middleware(request: NextRequest) {
   }
 
   // Check for session cookie
-  const token = request.cookies.get('crm_access_token');
+  // const token = request.cookies.get('crm_access_token');
 
-  if (!token || token.value !== 'authenticated') {
-    // Redirect to login
-    const loginUrl = new URL('/login', request.url);
-    return NextResponse.redirect(loginUrl);
-  }
+  // if (!token || token.value !== 'authenticated') {
+  //   // Redirect to login
+  //   const loginUrl = new URL('/login', request.url);
+  //   return NextResponse.redirect(loginUrl);
+  // }
 
   return NextResponse.next();
 }
