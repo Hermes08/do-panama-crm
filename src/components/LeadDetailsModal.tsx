@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { X, Calendar, MapPin, DollarSign, User, Tag, Clock, Briefcase, Edit2, Save, Loader2, Trash2 } from "lucide-react";
 import { type Client } from "@/types";
 import { supabase } from "@/lib/supabaseClient";
+import { BUYER_TYPES } from "@/lib/constants";
 
 interface LeadDetailsModalProps {
     isOpen: boolean;
@@ -249,8 +250,9 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
 
                         <div className="p-4 rounded-xl bg-white/5 border border-white/5 flex items-start gap-3">
                             <Briefcase className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+
                             <div className="w-full">
-                                <p className="text-xs text-white/50 uppercase tracking-wider mb-1">Interés</p>
+                                <p className="text-xs text-white/50 uppercase tracking-wider mb-1">Buyer Persona / Interés</p>
                                 {isEditing ? (
                                     <input
                                         className="bg-black/30 border border-white/10 rounded px-2 py-1 w-full text-sm"
@@ -258,7 +260,20 @@ export default function LeadDetailsModal({ isOpen, onClose, client, onClientUpda
                                         onChange={(e) => handleChange('interest_category', e.target.value)}
                                     />
                                 ) : (
-                                    <p className="font-medium">{client?.interest_category || "No especificado"}</p>
+                                    <div>
+                                        {(() => {
+                                            const buyerType = BUYER_TYPES.find(t => t.id === client?.interest_category);
+                                            if (buyerType) {
+                                                return (
+                                                    <div>
+                                                        <p className="font-bold text-brand-gold">{buyerType.label}</p>
+                                                        <p className="text-xs text-white/60">{buyerType.description}</p>
+                                                    </div>
+                                                );
+                                            }
+                                            return <p className="font-medium">{client?.interest_category || "No especificado"}</p>;
+                                        })()}
+                                    </div>
                                 )}
                             </div>
                         </div>
