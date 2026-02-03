@@ -208,8 +208,8 @@ export default function PublicIntakePage() {
                                                     }`}
                                             >
                                                 <div>
-                                                    <div className="font-bold text-sm md:text-base">{type.label}</div>
-                                                    <div className={`text-xs mt-1 ${formData.buyer_type === type.id ? 'text-brand-navy/70' : 'text-white/50'}`}>{type.description}</div>
+                                                    <div className="font-extrabold text-base md:text-lg tracking-wide">{type.label}</div>
+                                                    <div className={`text-xs md:text-sm mt-1 font-medium ${formData.buyer_type === type.id ? 'text-brand-navy/80' : 'text-white/60'}`}>{type.description}</div>
                                                 </div>
                                                 {formData.buyer_type === type.id && <CheckCircle className="w-5 h-5" />}
                                             </button>
