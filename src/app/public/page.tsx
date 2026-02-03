@@ -6,6 +6,7 @@ import { Loader2, CheckCircle, Send, User, Mail, Youtube, Linkedin, Play, Lock, 
 import Link from 'next/link';
 
 import { BUYER_TYPES } from "@/lib/constants";
+import WorldCitizenBackground from "@/components/WorldCitizenBackground";
 
 export default function PublicIntakePage() {
     const [step, setStep] = useState(1); // 1: Info, 2: Calendar
@@ -13,7 +14,8 @@ export default function PublicIntakePage() {
     const [formData, setFormData] = useState({
         full_name: "",
         email: "",
-        buyer_type: "", // The key 4th question
+        buyer_type: "",
+        client_story: "", // New "Who am I" field
     });
 
     // Calendar Mock State
@@ -51,7 +53,7 @@ export default function PublicIntakePage() {
                 status: 'Prospecto',
                 // Store the buyer type in notes or interest category
                 interest_category: formData.buyer_type,
-                detailed_notes: `[Web Lead] Buyer Type: ${formData.buyer_type}. Booked: ${selectedDate} at ${selectedTime}`,
+                detailed_notes: `[Web Lead] Buyer Type: ${formData.buyer_type}.\n\nClient Story: ${formData.client_story}\n\nBooked: ${selectedDate} at ${selectedTime}`,
                 created_at: new Date().toISOString()
             };
 
@@ -72,8 +74,9 @@ export default function PublicIntakePage() {
 
     if (submitted) {
         return (
-            <div className="min-h-screen flex items-center justify-center p-4 bg-[#0f1014] text-white">
-                <div className="glass-card max-w-md w-full p-10 text-center border border-white/10">
+            <div className="min-h-screen flex items-center justify-center p-4 bg-[#0f1014] text-white overflow-hidden relative">
+                <WorldCitizenBackground />
+                <div className="glass-card max-w-md w-full p-10 text-center border border-white/10 relative z-10">
                     <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
                         <CheckCircle className="w-10 h-10 text-green-500" />
                     </div>
@@ -93,11 +96,12 @@ export default function PublicIntakePage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#0f1014] text-white font-sans selection:bg-brand-gold selection:text-brand-navy">
+        <div className="min-h-screen bg-[#0f1014] text-white font-sans selection:bg-brand-gold selection:text-brand-navy relative">
+            <WorldCitizenBackground />
 
             {/* Header / Hero */}
-            <header className="relative w-full py-12 md:py-20 px-4 flex flex-col items-center justify-center overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-brand-navy/50 to-[#0f1014] z-0"></div>
+            <header className="relative w-full py-12 md:py-20 px-4 flex flex-col items-center justify-center overflow-hidden z-10">
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-brand-navy/50 to-transparent z-0"></div>
                 <div className="relative z-10 text-center max-w-3xl mx-auto space-y-4">
                     <h1 className="text-4xl md:text-6xl font-heading font-bold tracking-tight">
                         Do Panama <span className="text-brand-gold">Real Estate</span>
@@ -199,8 +203,8 @@ export default function PublicIntakePage() {
                                                 key={type.id}
                                                 onClick={() => setFormData(prev => ({ ...prev, buyer_type: type.id }))}
                                                 className={`p-4 rounded-xl text-left border transition-all duration-200 flex items-center justify-between group ${formData.buyer_type === type.id
-                                                        ? 'bg-brand-gold text-brand-navy border-brand-gold'
-                                                        : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+                                                    ? 'bg-brand-gold text-brand-navy border-brand-gold'
+                                                    : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
                                                     }`}
                                             >
                                                 <div>
@@ -211,6 +215,20 @@ export default function PublicIntakePage() {
                                             </button>
                                         ))}
                                     </div>
+                                </div>
+
+                                <div className="space-y-2 pt-4">
+                                    <label className="text-sm font-bold text-brand-gold uppercase tracking-wider">
+                                        Who am I as a client?
+                                    </label>
+                                    <textarea
+                                        name="client_story"
+                                        value={formData.client_story}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, client_story: e.target.value }))}
+                                        placeholder="Tell me everything... (I can handle it)"
+                                        rows={4}
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-brand-gold/50 outline-none transition-all placeholder:text-white/30 text-sm"
+                                    />
                                 </div>
                             </div>
 
@@ -248,8 +266,8 @@ export default function PublicIntakePage() {
                                             key={day}
                                             onClick={() => setSelectedDate(`2026-02-${day}`)}
                                             className={`aspect-square rounded-lg flex items-center justify-center text-sm transition-all ${selectedDate === `2026-02-${day}`
-                                                    ? 'bg-brand-gold text-brand-navy font-bold shadow-lg shadow-brand-gold/20'
-                                                    : 'hover:bg-white/10 text-white/80'
+                                                ? 'bg-brand-gold text-brand-navy font-bold shadow-lg shadow-brand-gold/20'
+                                                : 'hover:bg-white/10 text-white/80'
                                                 }`}
                                         >
                                             {day}
@@ -265,8 +283,8 @@ export default function PublicIntakePage() {
                                             key={time}
                                             onClick={() => setSelectedTime(time)}
                                             className={`py-2 rounded-lg text-xs font-bold border ${selectedTime === time
-                                                    ? 'bg-brand-gold text-brand-navy border-brand-gold'
-                                                    : 'bg-transparent text-white border-white/20 hover:border-white/50'
+                                                ? 'bg-brand-gold text-brand-navy border-brand-gold'
+                                                : 'bg-transparent text-white border-white/20 hover:border-white/50'
                                                 }`}
                                         >
                                             {time}

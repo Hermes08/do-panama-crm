@@ -1,23 +1,23 @@
 
 export const BUYER_TYPES = [
     {
-        id: "vip",
-        label: "VIP Buyer (I want you exclusively)",
-        description: "I am ready to buy, I value your time, and I want you to be my only realtor in Panama."
+        id: "exclusive_client",
+        label: "Exclusive Client (VIP Treatment)",
+        description: "I want you to be my exclusive realtor... while I am in Panama you only work for me."
     },
     {
-        id: "indecisive",
-        label: "Decision Pending (Factors needed)",
-        description: "I have checks to clear, partners to convince, or timelines that are still fuzzy."
+        id: "home_seller",
+        label: "Home Seller (US Property)",
+        description: "I haven't called my realtor in the US yet... I have to sell my house first."
     },
     {
-        id: "comparison",
+        id: "comparison_shopper",
         label: "Comparison Shopper (Panama vs World)",
-        description: "I'm looking at Costa Rica, Colombia, etc. Sell me on why Panama wins."
+        description: "Show me that Panama Wins... if you win, I'll call my realtor in front of you."
     },
     {
-        id: "consultant",
-        label: "Consultant Seeker (Paid Advice)",
-        description: "I'm just passing through. I'll pay for your time/tour, but I'm not buying property right now."
+        id: "consultant_seeker",
+        label: "Consultant Seeker (1000 Questions)",
+        description: "I have 1000 questions... just answer them."
     }
 ];
