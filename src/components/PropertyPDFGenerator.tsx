@@ -256,6 +256,60 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                 )}
             </div>
 
+            {/* Feature Showcase / Empty State */}
+            {!propertyData && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="glass-card p-6 border border-white/5 hover:border-brand-gold/30 transition-colors group">
+                        <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <FileText className="w-6 h-6 text-blue-400" />
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-2">Professional PDF</h3>
+                        <p className="text-white/60 text-sm">
+                            Generate high-quality PDF presentations with the new "Sky & Slate" design. Perfect for client emails.
+                        </p>
+                    </div>
+
+                    <div className="glass-card p-6 border border-white/5 hover:border-brand-gold/30 transition-colors group">
+                        <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <Video className="w-6 h-6 text-purple-400" />
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-2">Video Reels</h3>
+                        <p className="text-white/60 text-sm">
+                            Create engaging 60s video slideshows with music and animations. Ideal for Instagram & WhatsApp Status.
+                        </p>
+                    </div>
+
+                    {/* Quick Test Button */}
+                    <div className="col-span-1 md:col-span-2 text-center">
+                        <button
+                            onClick={() => {
+                                setPropertyData({
+                                    title: "Luxury Ocean View Penthouse",
+                                    price: "$1,250,000",
+                                    location: "Punta Pacifica, Panama City",
+                                    bedrooms: "4",
+                                    bathrooms: "4.5",
+                                    area: "350 m²",
+                                    description: "Experience the pinnacle of luxury living in this stunning penthouse. Featuring panoramic ocean views, marble floors, and top-of-the-line appliances.",
+                                    features: ["Ocean View", "Pool", "Gym", "Concierge", "24/7 Security", "Smart Home"],
+                                    images: [
+                                        "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1000&q=80",
+                                        "https://images.unsplash.com/photo-1600596542815-e495d915993a?auto=format&fit=crop&w=1000&q=80",
+                                        "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1000&q=80",
+                                        "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1000&q=80"
+                                    ],
+                                    source: "demo"
+                                    // @ts-ignore
+                                });
+                            }}
+                            className="text-white/30 text-xs hover:text-white underline"
+                        >
+                            Load Sample Data (Test UI)
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Property Data Preview */}
             {propertyData && (
                 <div className="glass-card p-4 md:p-6 space-y-4">
