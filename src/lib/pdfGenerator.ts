@@ -68,6 +68,36 @@ export async function generatePropertyPDF(
         white: [255, 255, 255]
     };
 
+    // Helper to sanitize text for jsPDF (removes emojis, replaces common special chars)
+    const clean = (str: string | undefined) => {
+        if (!str) return "";
+        return str
+            .replace(/[^\x00-\x7F]/g, (char) => {
+                // Map common chars
+                const map: Record<string, string> = {
+                    'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+                    'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
+                    'ñ': 'n', 'Ñ': 'N', '²': '2', '³': '3', '°': 'deg',
+                    '–': '-', '—': '-', '“': '"', '”': '"', '‘': "'", '’': "'"
+                };
+                return map[char] || ""; // Remove unknown
+            })
+            .trim();
+    };
+
+    // Sanitize Data
+    const data = {
+        ...propertyData,
+        title: clean(propertyData.title),
+        price: clean(propertyData.price),
+        location: clean(propertyData.location),
+        description: clean(propertyData.description),
+        bedrooms: clean(propertyData.bedrooms),
+        bathrooms: clean(propertyData.bathrooms),
+        area: clean(propertyData.area),
+        features: propertyData.features.map(clean)
+    };
+
     // Helper for background
     const drawBackground = () => {
         doc.setFillColor(colors.bgLight[0], colors.bgLight[1], colors.bgLight[2]);
@@ -110,24 +140,26 @@ export async function generatePropertyPDF(
     doc.setLineWidth(1);
     doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, "S");
 
+
+
     // Text Content
     doc.setFont("helvetica", "bold");
     doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
     doc.setFontSize(26);
 
-    const titleLines = doc.splitTextToSize(propertyData.title.toUpperCase(), cardW - 20);
+    const titleLines = doc.splitTextToSize(data.title.toUpperCase(), cardW - 20);
     doc.text(titleLines[0], W / 2, cardY + 25, { align: "center" });
 
     // Price
     doc.setFontSize(32);
     doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-    doc.text(propertyData.price, W / 2, cardY + 45, { align: "center" });
+    doc.text(data.price, W / 2, cardY + 45, { align: "center" });
 
     // Location
     doc.setFontSize(14);
     doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
     doc.setFont("helvetica", "normal");
-    doc.text("📍 " + propertyData.location, W / 2, cardY + 60, { align: "center" });
+    doc.text(data.location, W / 2, cardY + 60, { align: "center" });
 
     // Footer Info
     doc.setFontSize(10);
@@ -153,10 +185,10 @@ export async function generatePropertyPDF(
 
     // Icon Grid
     const specIcons = [
-        { label: "BEDROOMS", val: propertyData.bedrooms, icon: "🛏" },
-        { label: "BATHROOMS", val: propertyData.bathrooms, icon: "🛁" },
-        { label: "LIVING AREA", val: propertyData.area, icon: "📐" },
-        { label: "LOCATION", val: propertyData.location.split(",")[0], icon: "🗺" } // Short loc
+        { label: "BEDROOMS", val: data.bedrooms, icon: "Beds" },
+        { label: "BATHROOMS", val: data.bathrooms, icon: "Baths" },
+        { label: "LIVING AREA", val: data.area, icon: "Area" },
+        { label: "LOCATION", val: data.location.split(",")[0], icon: "Loc" } // Short loc
     ].filter(i => i.val); // Only show existing data
 
     const cols = 2; // 2x2 grid for specs
@@ -204,7 +236,7 @@ export async function generatePropertyPDF(
     doc.setFontSize(11);
     doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
 
-    const descText = doc.splitTextToSize(propertyData.description, W - margin * 2);
+    const descText = doc.splitTextToSize(data.description, W - margin * 2);
     // Limit lines to fit page
     const maxLines = 12;
     doc.text(descText.slice(0, maxLines), margin, y);
@@ -215,7 +247,7 @@ export async function generatePropertyPDF(
 
     // ========== SLIDE 3: GALLERY ==========
     // Combine custom and scraped images
-    const allImages = [...customImages, ...propertyData.images];
+    const allImages = [...customImages, ...data.images];
     // Avoid re-using hero if it was index 0, but okay for gallery usually
     // Let's take up to 4 nicely laid out images
 
@@ -266,7 +298,7 @@ export async function generatePropertyPDF(
     }
 
     // ========== SLIDE 4: FEATURES LIST ==========
-    if (propertyData.features.length > 0) {
+    if (data.features.length > 0) {
         doc.addPage();
         drawBackground();
 
@@ -283,14 +315,14 @@ export async function generatePropertyPDF(
         doc.setFontSize(11);
         doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
 
-        propertyData.features.forEach((feat, i) => {
+        data.features.forEach((feat, i) => {
             const col = i % colCount;
             const row = Math.floor(i / colCount);
 
             // Check page overflow
             if (y + row * 10 > H - 30) return;
 
-            doc.text("•  " + feat, margin + col * colWidth, y + row * 12);
+            doc.text("- " + feat, margin + col * colWidth, y + row * 12);
         });
     }
 

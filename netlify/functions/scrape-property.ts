@@ -160,6 +160,25 @@ function findInText($: ReturnType<typeof cheerio.load>, keywords: string[], minL
 
 function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: string, html: string): PropertyData {
 
+    // ========== SPECIFIC STRATEGY: ENCUENTRA24 ==========
+    if (url.includes("encuentra24.com")) {
+        const e24 = extractEncuentra24($, html);
+        if (e24.title && e24.price) {
+            return {
+                title: e24.title,
+                price: e24.price,
+                location: e24.location || "Panama",
+                description: e24.description || "",
+                features: e24.features || [],
+                images: e24.images || [],
+                bedrooms: e24.bedrooms,
+                bathrooms: e24.bathrooms,
+                area: e24.area,
+                source: "Encuentra24"
+            };
+        }
+    }
+
     // ========== TITLE (6 STRATEGIES) ==========
     let title =
         trySelectors($, ["h1", ".property-title", ".listing-title", "#property-title", "[class*='title']", "[itemprop='name']"]) ||
@@ -185,7 +204,7 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
             const num = parseInt(match.replace(/[^\d]/g, ''));
             return num > 10000 && num < 100000000; // Reasonable property price range
         }) ||
-        findInText($, ["Price", "Precio", "Cost", "Costo"]) ||
+        // Remove text analysis for price as it is too risky
         "Contact for Price";
 
     // ========== LOCATION (7 STRATEGIES) ==========
@@ -193,10 +212,6 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
         trySelectors($, [".location", ".property-location", ".address", "[class*='location']", "[class*='address']", "[itemprop='address']"]) ||
         tryMetaTags($, ["og:locality", "og:region", "geo.placename"]) ||
         tryJSONLD($, "address") ||
-        tryRegex(html, [
-            /(?:Panamá|Panama City|Costa del Este|Punta Pacifica|San Francisco|El Cangrejo|Casco Viejo|Clayton|Albrook|Betania|Bella Vista|Obarrio|Marbella|Costa Sur|Condado del Rey|Tocumen|Las Cumbres|Arraijan|La Chorrera|Coronado|Buenaventura|Playa Blanca|Santa Clara|Pedasí|Boquete|David|Chitré|Santiago|Colón)[,\s]*/i
-        ]) ||
-        findInText($, ["Location", "Ubicación", "Address", "Dirección"]) ||
         "Panama";
 
     // ========== BEDROOMS (6 STRATEGIES) ==========
@@ -210,8 +225,7 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
         ], (match) => {
             const num = parseInt(match.match(/\d+/)?.[0] || "0");
             return num > 0 && num < 20;
-        }) ||
-        findInText($, ["Bedrooms", "Habitaciones", "Dormitorios", "Beds"]);
+        });
 
     if (bedrooms && !/bed/i.test(bedrooms)) {
         const num = bedrooms.match(/\d+/)?.[0];
@@ -228,8 +242,7 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
         ], (match) => {
             const num = parseFloat(match.match(/\d+(?:\.\d+)?/)?.[0] || "0");
             return num > 0 && num < 20;
-        }) ||
-        findInText($, ["Bathrooms", "Baños", "Baths"]);
+        });
 
     if (bathrooms && !/bath/i.test(bathrooms)) {
         const num = bathrooms.match(/\d+(?:\.\d+)?/)?.[0];
@@ -247,23 +260,26 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
         ], (match) => {
             const num = parseInt(match.replace(/[^\d]/g, ''));
             return num > 20 && num < 100000; // Reasonable area range
-        }) ||
-        findInText($, ["Area", "Área", "Size", "Tamaño", "Superficie"]);
+        });
 
     // ========== DESCRIPTION (7 STRATEGIES) ==========
+    // Cleanup HTML before extracting text
+    $("script, style, nav, footer, header, noscript, iframe").remove();
+
     let description =
         trySelectors($, [".description", ".property-description", "[class*='description']", "[itemprop='description']"]) ||
         tryMetaTags($, ["og:description", "twitter:description", "description"]) ||
         tryJSONLD($, "description");
 
-    // Fallback: Get longest paragraph
+    // Fallback: Get longest paragraph logic (improved)
     if (!description || description.length < 100) {
         let maxLen = 0;
         $("p").each((_, el) => {
             const text = $(el).text().trim();
             if (text.length > maxLen && text.length > 50 &&
                 !text.toLowerCase().includes("cookie") &&
-                !text.toLowerCase().includes("privacy")) {
+                !text.toLowerCase().includes("privacy") &&
+                !text.includes("{")) { // Avoid JS
                 maxLen = text.length;
                 description = text;
             }
@@ -277,8 +293,8 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
     const features: string[] = [];
     const seenFeatures = new Set<string>();
 
-    // Strategy 1: List items
-    $("li").each((_, el) => {
+    // Strategy: Look for UL/LI inside main content areas only
+    $("main, .content, #content, .details").find("li").each((_, el) => {
         const text = $(el).text().trim().replace(/\s+/g, ' ').substring(0, 60);
         if (isValidFeature(text) && !seenFeatures.has(text.toLowerCase())) {
             seenFeatures.add(text.toLowerCase());
@@ -286,26 +302,40 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
         }
     });
 
-    // Strategy 2: Feature/amenity classes
-    $("[class*='feature'], [class*='amenity'], [class*='caracteristica']").each((_, el) => {
-        const text = $(el).text().trim().replace(/\s+/g, ' ').substring(0, 60);
-        if (isValidFeature(text) && !seenFeatures.has(text.toLowerCase())) {
-            seenFeatures.add(text.toLowerCase());
-            features.push(text);
-        }
-    });
-
-    // Strategy 3: Bullet points in text
-    const bulletMatches = html.match(/[•●■▪▸►]\s*([^\n<>]{3,60})/g);
-    if (bulletMatches) {
-        bulletMatches.forEach(match => {
-            const text = match.replace(/[•●■▪▸►]\s*/, '').trim();
-            if (isValidFeature(text) && !seenFeatures.has(text.toLowerCase())) {
+    if (features.length === 0) {
+        // Fallback to global LI if safe
+        $("li").each((_, el) => {
+            const text = $(el).text().trim().replace(/\s+/g, ' ').substring(0, 60);
+            if (isValidFeature(text) && !seenFeatures.has(text.toLowerCase()) &&
+                !["home", "about", "contact", "login"].includes(text.toLowerCase())) {
                 seenFeatures.add(text.toLowerCase());
                 features.push(text);
             }
         });
     }
+
+    // ========== IMAGES ==========
+    const images: string[] = [];
+    const seenImages = new Set<string>();
+
+    // 1. OG Image
+    const ogImg = $('meta[property="og:image"]').attr('content');
+    if (ogImg && !seenImages.has(ogImg)) {
+        images.push(ogImg);
+        seenImages.add(ogImg);
+    }
+
+    // 2. Gallery Images (Generic)
+    $("img").each((_, el) => {
+        const src = $(el).attr("src") || $(el).attr("data-src") || $(el).attr("data-original");
+        if (src && src.startsWith("http") && !seenImages.has(src)) {
+            // Filter out small icons/logos
+            if (!src.includes("logo") && !src.includes("icon") && !src.includes("avatar")) {
+                images.push(src);
+                seenImages.add(src);
+            }
+        }
+    });
 
     return {
         title,
@@ -315,9 +345,50 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
         bathrooms,
         area,
         description,
-        features: features.slice(0, 25),
-        images: [], // User will upload images manually
+        features: features.slice(0, 15), // Limit features
+        images: images.slice(0, 10), // Limit images
         source: new URL(url).hostname
+    };
+}
+
+function extractEncuentra24($: ReturnType<typeof cheerio.load>, html: string): Partial<PropertyData> {
+    const title = $("h1").first().text().trim();
+    const price = $(".price, [class*='price']").first().text().trim() ||
+        $("div:contains('Precio')").next().text().trim();
+
+    const location = $(".location, [class*='address']").first().text().trim() ||
+        $("div:contains('Ubicación')").next().text().trim();
+
+    // Specific to Encuentra24 structure
+    const bedrooms = $(".info-details .bedrooms, .info-details:contains('Recámaras') .value").text().trim();
+    const bathrooms = $(".info-details .bathrooms, .info-details:contains('Baños') .value").text().trim();
+    const area = $(".info-details .area, .info-details:contains('m²') .value").text().trim();
+
+    const description = $(".description-container, .description").text().trim();
+
+    // Features in Encuentra24 are often in a specific list
+    const features: string[] = [];
+    $(".amenities li, .features li").each((_, el) => {
+        features.push($(el).text().trim());
+    });
+
+    // Images in carousel
+    const images: string[] = [];
+    $(".gallery-image, .carousel-item img").each((_, el) => {
+        const src = $(el).attr("data-src") || $(el).attr("src");
+        if (src && src.startsWith("http")) images.push(src);
+    });
+
+    return {
+        title,
+        price,
+        location,
+        bedrooms,
+        bathrooms,
+        area,
+        description,
+        features,
+        images
     };
 }
 
