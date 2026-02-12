@@ -7,7 +7,7 @@ import { generatePropertyPDF } from "@/lib/pdfGenerator";
 import { generatePropertyVideo } from "@/lib/videoGenerator";
 import PropertyDataEditor from "@/components/PropertyDataEditor";
 import ImageManager from "@/components/ImageManager";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createBrowserClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
 import { generateSlug } from "@/lib/slugify";
 
@@ -40,7 +40,10 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
     const [customImages, setCustomImages] = useState<string[]>([]);
 
     const router = useRouter();
-    const supabase = createClientComponentClient();
+    const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
 
     const [error, setError] = useState("");
     const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);

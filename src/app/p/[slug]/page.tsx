@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createBrowserClient } from "@supabase/auth-helpers-nextjs";
 import { PropertyPresentation } from "@/types";
 import { Edit2, Share2, Download, Eye, EyeOff, Loader2 } from "lucide-react";
 import PresentationView from "@/components/PresentationView";
@@ -10,7 +10,10 @@ import PresentationView from "@/components/PresentationView";
 export default function PropertyPresentationPage() {
     const params = useParams();
     const router = useRouter();
-    const supabase = createClientComponentClient();
+    const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
 
     const [presentation, setPresentation] = useState<PropertyPresentation | null>(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -165,8 +168,8 @@ export default function PropertyPresentationPage() {
                             <button
                                 onClick={() => setIsEditing(!isEditing)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${isEditing
-                                        ? 'bg-blue-500 text-white'
-                                        : 'bg-white/10 text-white hover:bg-white/20'
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-white/10 text-white hover:bg-white/20'
                                     }`}
                             >
                                 <Edit2 className="w-4 h-4" />
