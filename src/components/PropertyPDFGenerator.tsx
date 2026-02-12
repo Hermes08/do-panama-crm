@@ -392,14 +392,13 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                             </button>
                         </div>
                     </div>
-                        <button
-                            onClick={handleTranslate}
-                            disabled={translating}
-                            className="glass-btn px-4 py-2 bg-gleec-purple/20 text-gleec-purple border-gleec-purple/50 hover:bg-gleec-purple hover:text-white"
-                        >
-                            {translating ? <Loader2 className="w-4 h-4 animate-spin" /> : t.translateBtn}
-                        </button>
-                    </div>
+                    <button
+                        onClick={handleTranslate}
+                        disabled={translating}
+                        className="glass-btn px-4 py-2 bg-gleec-purple/20 text-gleec-purple border-gleec-purple/50 hover:bg-gleec-purple hover:text-white"
+                    >
+                        {translating ? <Loader2 className="w-4 h-4 animate-spin" /> : t.translateBtn}
+                    </button>
 
                     <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
@@ -449,218 +448,217 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                         </div>
                     </div>
                 </div>
-    )
-}
+            )
 
-{/* Translated Data */ }
-{
-    translatedData && (
-        <div className="glass-card p-6 space-y-4 border-2 border-gleec-cyan/30">
-            <h3 className="text-xl font-bold text-gleec-cyan">{t.translatedData}</h3>
-            <div>
-                <p className="text-white/50 mb-2">{t.description}</p>
-                <p className="text-white/80 text-sm">{translatedData.description}</p>
-            </div>
-        </div>
-    )
-}
+{/* Translated Data */}
+            {
+                translatedData && (
+                    <div className="glass-card p-6 space-y-4 border-2 border-gleec-cyan/30">
+                        <h3 className="text-xl font-bold text-gleec-cyan">{t.translatedData}</h3>
+                        <div>
+                            <p className="text-white/50 mb-2">{t.description}</p>
+                            <p className="text-white/80 text-sm">{translatedData.description}</p>
+                        </div>
+                    </div>
+                )
+            }
 
-{/* Custom Images Upload */ }
-{
-    propertyData && (
-        <div className="glass-card p-6">
-            <label className="block">
-                <div className="flex items-center gap-2 mb-3 text-white">
-                    <ImageIcon className="w-5 h-5" />
-                    <span className="font-semibold">{t.uploadImages}</span>
-                </div>
-                <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleImageUpload}
-                    className="block w-full text-sm text-white/70 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gleec-cyan/20 file:text-gleec-cyan hover:file:bg-gleec-cyan hover:file:text-black"
-                />
-            </label>
-            {customImages.length > 0 && (
-                <div className="mt-4 grid grid-cols-4 gap-2">
-                    {customImages.map((img, i) => (
-                        <img key={i} src={img} alt={`Custom ${i + 1}`} className="w-full h-20 object-cover rounded-lg border-2 border-gleec-cyan/50" />
-                    ))}
-                </div>
-            )}
-        </div>
-    )
-}
+            {/* Custom Images Upload */}
+            {
+                propertyData && (
+                    <div className="glass-card p-6">
+                        <label className="block">
+                            <div className="flex items-center gap-2 mb-3 text-white">
+                                <ImageIcon className="w-5 h-5" />
+                                <span className="font-semibold">{t.uploadImages}</span>
+                            </div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handleImageUpload}
+                                className="block w-full text-sm text-white/70 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gleec-cyan/20 file:text-gleec-cyan hover:file:bg-gleec-cyan hover:file:text-black"
+                            />
+                        </label>
+                        {customImages.length > 0 && (
+                            <div className="mt-4 grid grid-cols-4 gap-2">
+                                {customImages.map((img, i) => (
+                                    <img key={i} src={img} alt={`Custom ${i + 1}`} className="w-full h-20 object-cover rounded-lg border-2 border-gleec-cyan/50" />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )
+            }
 
-{/* Generate Actions */ }
-{
-    propertyData && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-white/10 pt-8">
-            {/* WEB VIEW Action - PRIMARY */}
-            <button
-                onClick={handleViewPresentation}
-                className="col-span-full glass-btn bg-brand-gold text-brand-navy border-brand-gold hover:bg-white font-bold text-xl flex items-center justify-center gap-3 py-6 shadow-[0_0_30px_rgba(234,179,8,0.2)] hover:scale-[1.01] transition-all"
-            >
-                <Sparkles className="w-7 h-7" />
-                {lang === 'es' ? 'VER PRESENTACIÓN WEB (PREMIUM)' : 'VIEW WEB PRESENTATION (PREMIUM)'}
-            </button>
+            {/* Generate Actions */}
+            {
+                propertyData && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-white/10 pt-8">
+                        {/* WEB VIEW Action - PRIMARY */}
+                        <button
+                            onClick={handleViewPresentation}
+                            className="col-span-full glass-btn bg-brand-gold text-brand-navy border-brand-gold hover:bg-white font-bold text-xl flex items-center justify-center gap-3 py-6 shadow-[0_0_30px_rgba(234,179,8,0.2)] hover:scale-[1.01] transition-all"
+                        >
+                            <Sparkles className="w-7 h-7" />
+                            {lang === 'es' ? 'VER PRESENTACIÓN WEB (PREMIUM)' : 'VIEW WEB PRESENTATION (PREMIUM)'}
+                        </button>
 
-            {/* PDF Action */}
-            <button
-                onClick={handleGeneratePDF}
-                disabled={loading || generatingVideo}
-                className="glass-btn bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-500 hover:text-white font-bold text-lg disabled:opacity-50 flex items-center justify-center gap-2 py-4"
-            >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
-                {t.generateBtn}
-            </button>
+                        {/* PDF Action */}
+                        <button
+                            onClick={handleGeneratePDF}
+                            disabled={loading || generatingVideo}
+                            className="glass-btn bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-500 hover:text-white font-bold text-lg disabled:opacity-50 flex items-center justify-center gap-2 py-4"
+                        >
+                            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
+                            {t.generateBtn}
+                        </button>
 
-            {/* Video Action */}
-            <button
-                onClick={handleGenerateVideo}
-                disabled={loading || generatingVideo}
-                className="glass-btn bg-purple-500/20 text-purple-400 border-purple-500/50 hover:bg-purple-500 hover:text-white font-bold text-lg disabled:opacity-50 flex items-center justify-center gap-2 py-4"
-            >
-                {generatingVideo ? (
-                    <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span className="text-sm ml-2">
-                            {videoProgress}%
-                        </span>
-                    </>
-                ) : (
-                    <>
-                        <Video className="w-5 h-5" />
-                        {t.generateVideoBtn}
-                    </>
-                )}
-            </button>
+                        {/* Video Action */}
+                        <button
+                            onClick={handleGenerateVideo}
+                            disabled={loading || generatingVideo}
+                            className="glass-btn bg-purple-500/20 text-purple-400 border-purple-500/50 hover:bg-purple-500 hover:text-white font-bold text-lg disabled:opacity-50 flex items-center justify-center gap-2 py-4"
+                        >
+                            {generatingVideo ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <span className="text-sm ml-2">
+                                        {videoProgress}%
+                                    </span>
+                                </>
+                            ) : (
+                                <>
+                                    <Video className="w-5 h-5" />
+                                    {t.generateVideoBtn}
+                                </>
+                            )}
+                        </button>
 
-            {/* Persistence Action (Placeholder for now) */}
-            <button
-                className="glass-btn bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20 font-bold text-lg flex items-center justify-center gap-2 py-4"
-                onClick={() => alert(lang === 'es' ? 'Próximamente: Guardar enlace permanente' : 'Coming soon: Save permanent link')}
-            >
-                <ExternalLink className="w-5 h-5" />
-                {lang === 'es' ? 'Guardar Enlace' : 'Save Link'}
-            </button>
+                        {/* Persistence Action (Placeholder for now) */}
+                        <button
+                            className="glass-btn bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20 font-bold text-lg flex items-center justify-center gap-2 py-4"
+                            onClick={() => alert(lang === 'es' ? 'Próximamente: Guardar enlace permanente' : 'Coming soon: Save permanent link')}
+                        >
+                            <ExternalLink className="w-5 h-5" />
+                            {lang === 'es' ? 'Guardar Enlace' : 'Save Link'}
+                        </button>
 
-            {pdfBlob && (
-                <button
-                    onClick={handleDownloadPDF}
-                    className="col-span-full md:col-span-1 glass-btn bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold text-lg flex items-center justify-center gap-2"
-                >
-                    <Download className="w-5 h-5" />
-                    {t.downloadBtn}
-                </button>
-            )}
+                        {pdfBlob && (
+                            <button
+                                onClick={handleDownloadPDF}
+                                className="col-span-full md:col-span-1 glass-btn bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold text-lg flex items-center justify-center gap-2"
+                            >
+                                <Download className="w-5 h-5" />
+                                {t.downloadBtn}
+                            </button>
+                        )}
 
-            {videoBlob && (
-                <button
-                    onClick={handleDownloadVideo}
-                    className="col-span-full md:col-span-1 glass-btn bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold text-lg flex items-center justify-center gap-2"
-                >
-                    <Download className="w-5 h-5" />
-                    {t.downloadVideoBtn}
-                </button>
-            )}
-        </div>
-    )
-}
+                        {videoBlob && (
+                            <button
+                                onClick={handleDownloadVideo}
+                                className="col-span-full md:col-span-1 glass-btn bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold text-lg flex items-center justify-center gap-2"
+                            >
+                                <Download className="w-5 h-5" />
+                                {t.downloadVideoBtn}
+                            </button>
+                        )}
+                    </div>
+                )
+            }
 
-{/* PDF Preview Modal */ }
-{
-    showPdfPreview && pdfBlob && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="glass-card p-6 w-full max-w-4xl h-[90vh] flex flex-col">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-bold text-white">PDF Preview</h3>
-                    <button
-                        onClick={() => setShowPdfPreview(false)}
-                        className="text-white/70 hover:text-white"
-                    >
-                        <XCircle className="w-6 h-6" />
-                    </button>
-                </div>
+            {/* PDF Preview Modal */}
+            {
+                showPdfPreview && pdfBlob && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                        <div className="glass-card p-6 w-full max-w-4xl h-[90vh] flex flex-col">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xl font-bold text-white">PDF Preview</h3>
+                                <button
+                                    onClick={() => setShowPdfPreview(false)}
+                                    className="text-white/70 hover:text-white"
+                                >
+                                    <XCircle className="w-6 h-6" />
+                                </button>
+                            </div>
 
-                <div className="flex-1 bg-black/50 rounded-lg overflow-hidden mb-4">
-                    <iframe
-                        src={URL.createObjectURL(pdfBlob)}
-                        className="w-full h-full"
-                        title="PDF Preview"
-                    />
-                </div>
+                            <div className="flex-1 bg-black/50 rounded-lg overflow-hidden mb-4">
+                                <iframe
+                                    src={URL.createObjectURL(pdfBlob)}
+                                    className="w-full h-full"
+                                    title="PDF Preview"
+                                />
+                            </div>
 
-                <div className="flex gap-3">
-                    <button
-                        onClick={() => setShowPdfPreview(false)}
-                        className="flex-1 glass-btn bg-white/10 text-white border-white/20 hover:bg-white/20"
-                    >
-                        Close Preview
-                    </button>
-                    <button
-                        onClick={() => {
-                            handleDownloadPDF();
-                            setShowPdfPreview(false);
-                        }}
-                        className="flex-1 glass-btn bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold flex items-center justify-center gap-2"
-                    >
-                        <Download className="w-5 h-5" />
-                        {t.downloadBtn}
-                    </button>
-                </div>
-            </div>
-        </div>
-    )
-}
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowPdfPreview(false)}
+                                    className="flex-1 glass-btn bg-white/10 text-white border-white/20 hover:bg-white/20"
+                                >
+                                    Close Preview
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        handleDownloadPDF();
+                                        setShowPdfPreview(false);
+                                    }}
+                                    className="flex-1 glass-btn bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold flex items-center justify-center gap-2"
+                                >
+                                    <Download className="w-5 h-5" />
+                                    {t.downloadBtn}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
 
-{/* Video Preview Modal */ }
-{
-    showVideoPreview && videoBlob && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="glass-card p-6 w-full max-w-4xl flex flex-col">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-bold text-white">Video Preview</h3>
-                    <button
-                        onClick={() => setShowVideoPreview(false)}
-                        className="text-white/70 hover:text-white"
-                    >
-                        <XCircle className="w-6 h-6" />
-                    </button>
-                </div>
+            {/* Video Preview Modal */}
+            {
+                showVideoPreview && videoBlob && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                        <div className="glass-card p-6 w-full max-w-4xl flex flex-col">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xl font-bold text-white">Video Preview</h3>
+                                <button
+                                    onClick={() => setShowVideoPreview(false)}
+                                    className="text-white/70 hover:text-white"
+                                >
+                                    <XCircle className="w-6 h-6" />
+                                </button>
+                            </div>
 
-                <div className="aspect-video bg-black rounded-lg overflow-hidden mb-4 border border-white/10 relative group">
-                    <video
-                        src={URL.createObjectURL(videoBlob)}
-                        controls
-                        className="w-full h-full"
-                        autoPlay
-                    />
-                </div>
+                            <div className="aspect-video bg-black rounded-lg overflow-hidden mb-4 border border-white/10 relative group">
+                                <video
+                                    src={URL.createObjectURL(videoBlob)}
+                                    controls
+                                    className="w-full h-full"
+                                    autoPlay
+                                />
+                            </div>
 
-                <div className="flex gap-3">
-                    <button
-                        onClick={() => setShowVideoPreview(false)}
-                        className="flex-1 glass-btn bg-white/10 text-white border-white/20 hover:bg-white/20"
-                    >
-                        Close Preview
-                    </button>
-                    <button
-                        onClick={() => {
-                            handleDownloadVideo();
-                            setShowVideoPreview(false);
-                        }}
-                        className="flex-1 glass-btn bg-gleec-purple/20 text-gleec-purple border-gleec-purple/50 hover:bg-gleec-purple hover:text-white font-bold flex items-center justify-center gap-2"
-                    >
-                        <Download className="w-5 h-5" />
-                        {t.downloadVideoBtn}
-                    </button>
-                </div>
-            </div>
-        </div>
-    )
-}
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowVideoPreview(false)}
+                                    className="flex-1 glass-btn bg-white/10 text-white border-white/20 hover:bg-white/20"
+                                >
+                                    Close Preview
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        handleDownloadVideo();
+                                        setShowVideoPreview(false);
+                                    }}
+                                    className="flex-1 glass-btn bg-gleec-purple/20 text-gleec-purple border-gleec-purple/50 hover:bg-gleec-purple hover:text-white font-bold flex items-center justify-center gap-2"
+                                >
+                                    <Download className="w-5 h-5" />
+                                    {t.downloadVideoBtn}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
         </div >
     );
 }
