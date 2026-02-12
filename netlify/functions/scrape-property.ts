@@ -183,7 +183,15 @@ function getSchemaForUrl(url: string): any | null {
 
 // Map structured data from FireCrawl to PropertyData format
 function mapStructuredDataToPropertyData(data: any, url: string): PropertyData | null {
-    if (!data || !data.titulo) return null;
+    // Accept both 'titulo' (Spanish) and 'title' (English)
+    const title = data?.titulo || data?.title;
+    const price = data?.precio || data?.price;
+
+    // If we don't have at least title or price, return null
+    if (!title && !price) {
+        console.log("No title or price found in structured data");
+        return null;
+    }
 
     let hostname = "unknown";
     try {
@@ -222,14 +230,14 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
     }
 
     return {
-        title: cleanText(data.titulo),
-        price: cleanText(data.precio),
-        location: cleanText(data.ubicacion || "Panama"),
+        title: cleanText(title || "Property Listing"),
+        price: cleanText(price || "Contact for Price"),
+        location: cleanText(data.ubicacion || data.location || "Panama"),
         bedrooms,
         bathrooms,
         area,
-        description: cleanText(data.descripcion || data.titulo),
-        features: (data.amenidades || data.caracteristicas || []).map((f: string) => cleanText(f)),
+        description: cleanText(data.descripcion || data.description || title || "Luxury property in Panama"),
+        features: (data.amenidades || data.amenities || data.caracteristicas || data.features || []).map((f: string) => cleanText(f)),
         images: [], // Images will be extracted separately
         source: hostname
     };
