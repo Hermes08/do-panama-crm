@@ -83,6 +83,153 @@ function cleanText(text: string): string {
     return cleaned;
 }
 
+// Remove private information (company names, agent names, phone numbers, emails)
+function removePrivateInfo(text: string): string {
+    if (!text) return text;
+
+    let cleaned = text;
+
+    // Remove phone numbers (various formats)
+    cleaned = cleaned.replace(/(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3,4}[-.\s]?\d{4}/g, '');
+    cleaned = cleaned.replace(/\d{4}[-.\s]?\d{4}/g, ''); // Simple format: 1234-5678
+
+    // Remove emails
+    cleaned = cleaned.replace(/[\w.-]+@[\w.-]+\.\w+/gi, '');
+
+    // Remove contact phrases (Spanish and English)
+    const contactPatterns = [
+        /contactar?\s+a?\s*:?\s*[\w\s]+/gi,
+        /contact\s+:?\s*[\w\s]+/gi,
+        /agente\s*:?\s*[\w\s]+/gi,
+        /agent\s*:?\s*[\w\s]+/gi,
+        /llamar?\s+al?\s*:?\s*[\w\s]+/gi,
+        /call\s+:?\s*[\w\s]+/gi,
+        /whatsapp\s*:?\s*[\w\s\d]+/gi,
+        /tel[eé]fono\s*:?\s*[\w\s\d]+/gi,
+        /phone\s*:?\s*[\w\s\d]+/gi,
+        /correo\s*:?\s*[\w\s@.]+/gi,
+        /email\s*:?\s*[\w\s@.]+/gi,
+    ];
+
+    for (const pattern of contactPatterns) {
+        cleaned = cleaned.replace(pattern, '');
+    }
+
+    // Remove reference codes
+    cleaned = cleaned.replace(/ref\s*\.?\s*:?\s*[\w\d-]+/gi, '');
+    cleaned = cleaned.replace(/referencia\s*:?\s*[\w\d-]+/gi, '');
+    cleaned = cleaned.replace(/\bid\s*:?\s*[\w\d-]+/gi, '');
+    cleaned = cleaned.replace(/c[oó]digo\s*:?\s*[\w\d-]+/gi, '');
+
+    // Remove common real estate company names
+    const companies = [
+        'RE/MAX', 'REMAX', 'Century 21', 'Engel & Völkers', 'Sotheby\'s',
+        'Coldwell Banker', 'Keller Williams', 'ERA', 'Berkshire Hathaway',
+        'Inmobiliaria', 'Real Estate', 'Bienes Raíces'
+    ];
+
+    for (const company of companies) {
+        const regex = new RegExp(company, 'gi');
+        cleaned = cleaned.replace(regex, '');
+    }
+
+    // Clean up extra spaces and punctuation
+    cleaned = cleaned.replace(/\s{2,}/g, ' ');
+    cleaned = cleaned.replace(/\s+([.,;:])/g, '$1');
+    cleaned = cleaned.replace(/^[.,;:\s]+|[.,;:\s]+$/g, '');
+
+    return cleaned.trim();
+}
+
+// Translate property data to English using OpenAI
+async function translateToEnglish(data: PropertyData): Promise<PropertyData> {
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+    if (!OPENAI_API_KEY) {
+        console.warn("OPENAI_API_KEY not found, skipping translation");
+        return data;
+    }
+
+    try {
+        // Prepare content for translation
+        const contentToTranslate = {
+            title: data.title,
+            description: data.description,
+            location: data.location,
+            features: data.features || [],
+            bedrooms: data.bedrooms || '',
+            bathrooms: data.bathrooms || '',
+            area: data.area || ''
+        };
+
+        console.log("Translating to English...");
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [{
+                    role: 'system',
+                    content: `You are a professional real estate translator. Translate the following property listing data to English.
+                    
+CRITICAL RULES:
+- Preserve all numbers exactly as they are
+- Keep measurements (m², sq ft, etc.) unchanged
+- Maintain formatting and structure
+- Return ONLY a JSON object with the same structure
+- Do not add explanations or extra text
+- If text is already in English, keep it as is
+
+Return format:
+{
+  "title": "translated title",
+  "description": "translated description",
+  "location": "translated location",
+  "features": ["feature1", "feature2"],
+  "bedrooms": "translated bedrooms",
+  "bathrooms": "translated bathrooms",
+  "area": "translated area"
+}`
+                }, {
+                    role: 'user',
+                    content: JSON.stringify(contentToTranslate)
+                }],
+                temperature: 0.3,
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`OpenAI API failed: ${response.status}`);
+        }
+
+        const result = await response.json();
+        const translated = JSON.parse(result.choices[0].message.content);
+
+        console.log("Translation successful");
+
+        return {
+            ...data,
+            title: translated.title || data.title,
+            description: translated.description || data.description,
+            location: translated.location || data.location,
+            features: translated.features || data.features,
+            bedrooms: translated.bedrooms || data.bedrooms,
+            bathrooms: translated.bathrooms || data.bathrooms,
+            area: translated.area || data.area
+        };
+
+    } catch (error) {
+        console.error("Translation error:", error);
+        console.log("Returning original data without translation");
+        return data; // Fallback to original data
+    }
+}
+
 // Extraction schemas for different real estate websites
 const EXTRACTION_SCHEMAS: Record<string, any> = {
     'encuentra24.com': {
@@ -534,6 +681,19 @@ export const handler: Handler = async (event: HandlerEvent) => {
                 propertyData.description = fcData.data.markdown.substring(0, 1500);
             }
         }
+
+        // STEP 1: Remove private information (company names, agent info, phone numbers, emails)
+        console.log("Removing private information...");
+        propertyData.title = removePrivateInfo(propertyData.title);
+        propertyData.description = removePrivateInfo(propertyData.description);
+        propertyData.location = removePrivateInfo(propertyData.location);
+        propertyData.features = propertyData.features.map(f => removePrivateInfo(f)).filter(f => f.length > 0);
+        if (propertyData.bedrooms) propertyData.bedrooms = removePrivateInfo(propertyData.bedrooms);
+        if (propertyData.bathrooms) propertyData.bathrooms = removePrivateInfo(propertyData.bathrooms);
+        if (propertyData.area) propertyData.area = removePrivateInfo(propertyData.area);
+
+        // STEP 2: Translate to English
+        propertyData = await translateToEnglish(propertyData);
 
         return {
             statusCode: 200,
