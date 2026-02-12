@@ -235,81 +235,146 @@ const EXTRACTION_SCHEMAS: Record<string, any> = {
     'encuentra24.com': {
         type: "object",
         properties: {
-            titulo: { type: "string", description: "Título del listado" },
-            precio: { type: "string", description: "Precio de la propiedad" },
-            ubicacion: { type: "string", description: "Ubicación de la propiedad" },
+            titulo: {
+                type: "string",
+                description: "Property title/headline. Extract the main property title, usually at the top of the page. Example: 'Apartamento en Venta - Punta Pacifica'"
+            },
+            precio: {
+                type: "string",
+                description: "Property price. Look for the listing price, including currency symbol. Example: '$250,000', 'US$ 350,000', 'B/. 180,000'. If price says 'Consultar' or 'Contact for price', use that exact text."
+            },
+            ubicacion: {
+                type: "string",
+                description: "Property location/address. Extract the neighborhood, district, and city. Example: 'Punta Pacifica, Panama City', 'Costa del Este, Panama'"
+            },
+            area: {
+                type: "string",
+                description: "CRITICAL: Property area/size. ALWAYS extract this. Look for total area, construction area, or lot size. Include units. Examples: '150 m²', '1,615 sq ft', '200 m² construcción'. If not found, search harder in details or description. MANDATORY."
+            },
             detalles: {
                 type: "array",
-                description: "Detalles de la propiedad (habitaciones, baños, área)",
+                description: "Property details including bedrooms, bathrooms, parking, floor, etc. Extract each detail as a separate item. Examples: '3 habitaciones', '2 baños', '2 estacionamientos', 'Piso 15'. DO NOT include area here, it goes in the 'area' field.",
                 items: { type: "string" }
             },
             amenidades: {
                 type: "array",
-                description: "Amenidades de la propiedad",
+                description: "Property amenities and features. Extract all amenities like pool, gym, security, etc. Examples: 'Piscina', 'Gimnasio', 'Seguridad 24/7', 'Área de BBQ', 'Salón de eventos'. DO NOT include contact information or agent names.",
                 items: { type: "string" }
             },
-            descripcion: { type: "string", description: "Descripción completa de la propiedad" }
+            descripcion: {
+                type: "string",
+                description: "Full property description. Extract the complete description text that describes the property, its features, and surroundings. DO NOT include agent contact information, phone numbers, or emails."
+            }
         },
-        required: ["titulo", "precio"]
+        required: ["titulo", "precio", "ubicacion", "area", "descripcion"]
     },
     'jamesedition.com': {
         type: "object",
         properties: {
-            titulo: { type: "string", description: "Título del listado" },
-            precio: { type: "string", description: "Precio de la propiedad" },
-            ubicacion: { type: "string", description: "Ubicación de la propiedad" },
-            descripcion: { type: "string", description: "Descripción de la propiedad" },
+            titulo: {
+                type: "string",
+                description: "Property title. Extract the main listing title. Example: 'Luxury Penthouse in Panama City', 'Oceanfront Villa'"
+            },
+            precio: {
+                type: "string",
+                description: "Property price with currency. Example: '$2,500,000', '€1,800,000', 'Price upon request'"
+            },
+            ubicacion: {
+                type: "string",
+                description: "Property location. Extract city, region, and country. Example: 'Panama City, Panama', 'Bocas del Toro, Panama'"
+            },
+            area: {
+                type: "string",
+                description: "CRITICAL: Property area/size. ALWAYS extract this. Look for interior area, total area, or lot size. Include units. Examples: '500 m²', '5,382 sq ft', '1,000 m² interior + 2,000 m² lot'. MANDATORY."
+            },
+            descripcion: {
+                type: "string",
+                description: "Complete property description. Extract the full description including property highlights, features, and location details. Exclude agent contact information."
+            },
             caracteristicas: {
                 type: "array",
-                description: "Características de la propiedad",
+                description: "Property characteristics and specifications. Include bedrooms, bathrooms, year built, view, etc. Examples: '5 bedrooms', '6 bathrooms', 'Built in 2020', 'Ocean view', 'Penthouse'. DO NOT include area here.",
                 items: { type: "string" }
             },
             amenidades: {
                 type: "array",
-                description: "Amenidades de la propiedad",
+                description: "Luxury amenities and features. Examples: 'Infinity pool', 'Private gym', 'Wine cellar', 'Home theater', 'Smart home system', 'Helipad'. DO NOT include contact information.",
                 items: { type: "string" }
             }
         },
-        required: ["titulo", "precio"]
+        required: ["titulo", "precio", "ubicacion", "area", "descripcion"]
     },
     'compreoalquile.com': {
         type: "object",
         properties: {
-            titulo: { type: "string", description: "Título del listado" },
-            precio: { type: "string", description: "Precio de la propiedad" },
-            ubicacion: { type: "string", description: "Ubicación de la propiedad" },
+            titulo: {
+                type: "string",
+                description: "Property title. Example: 'Casa en Venta - Albrook', 'Apartamento en Alquiler'"
+            },
+            precio: {
+                type: "string",
+                description: "Price or rental amount. Example: '$180,000', '$1,200/mes'"
+            },
+            ubicacion: {
+                type: "string",
+                description: "Location. Example: 'Albrook, Panama City'"
+            },
+            area: {
+                type: "string",
+                description: "CRITICAL: Property area. ALWAYS extract. Examples: '120 m²', '95 m² construcción'. MANDATORY field."
+            },
             detalles: {
                 type: "array",
-                description: "Detalles de la propiedad",
+                description: "Property details. Examples: '3 recámaras', '2.5 baños', '2 parqueos'. DO NOT include area.",
                 items: { type: "string" }
             },
             amenidades: {
                 type: "array",
-                description: "Amenidades de la propiedad",
+                description: "Amenities. Examples: 'Piscina', 'Parqueo', 'Área verde'",
                 items: { type: "string" }
+            },
+            descripcion: {
+                type: "string",
+                description: "Property description without contact info"
             }
         },
-        required: ["titulo", "precio"]
+        required: ["titulo", "precio", "area"]
     },
     'mlsacobir.com': {
         type: "object",
         properties: {
-            titulo: { type: "string", description: "Título del listado" },
-            precio: { type: "string", description: "Precio de la propiedad" },
-            ubicacion: { type: "string", description: "Ubicación de la propiedad" },
-            descripcion: { type: "string", description: "Descripción de la propiedad" },
+            titulo: {
+                type: "string",
+                description: "MLS listing title. Example: 'Modern Apartment in Coco del Mar'"
+            },
+            precio: {
+                type: "string",
+                description: "Listing price. Example: '$295,000', 'B/. 250,000'"
+            },
+            ubicacion: {
+                type: "string",
+                description: "Property location. Example: 'Coco del Mar, Panama City'"
+            },
+            area: {
+                type: "string",
+                description: "CRITICAL: Property area/size. ALWAYS extract this from MLS data. Examples: '110 m²', '1,184 sq ft', '85 m² + 15 m² balcony'. MANDATORY."
+            },
+            descripcion: {
+                type: "string",
+                description: "MLS listing description. Extract the complete property description without agent contact details."
+            },
             caracteristicas: {
                 type: "array",
-                description: "Características de la propiedad",
+                description: "MLS property characteristics. Examples: '3 bedrooms', '2 bathrooms', '110 m²', '1 parking space', 'Floor 8'",
                 items: { type: "string" }
             },
             amenidades: {
                 type: "array",
-                description: "Amenidades de la propiedad",
+                description: "Building and property amenities. Examples: 'Swimming pool', 'Gym', '24/7 security', 'Social area', 'Elevator'",
                 items: { type: "string" }
             }
         },
-        required: ["titulo", "precio"]
+        required: ["titulo", "precio", "ubicacion", "descripcion"]
     }
 };
 
