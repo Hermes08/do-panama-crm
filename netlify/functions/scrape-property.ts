@@ -365,7 +365,7 @@ const EXTRACTION_SCHEMAS: Record<string, any> = {
             },
             caracteristicas: {
                 type: "array",
-                description: "MLS property characteristics. Examples: '3 bedrooms', '2 bathrooms', '110 m²', '1 parking space', 'Floor 8'",
+                description: "MLS property characteristics. Examples: '3 bedrooms', '2 bathrooms', '1 parking space', 'Floor 8'. DO NOT include area here.",
                 items: { type: "string" }
             },
             amenidades: {
@@ -374,7 +374,7 @@ const EXTRACTION_SCHEMAS: Record<string, any> = {
                 items: { type: "string" }
             }
         },
-        required: ["titulo", "precio", "ubicacion", "descripcion"]
+        required: ["titulo", "precio", "ubicacion", "area", "descripcion"]
     }
 };
 
