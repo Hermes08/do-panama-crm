@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Bed, Bath, Maximize, MapPin, Printer, ArrowLeft, Download, Share2 } from "lucide-react";
 
@@ -17,7 +17,7 @@ interface PropertyData {
     source: string;
 }
 
-export default function PropertyViewPage() {
+function PropertyViewContent() {
     const searchParams = useSearchParams();
     const [data, setData] = useState<PropertyData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -202,5 +202,17 @@ export default function PropertyViewPage() {
                 }
             `}</style>
         </div>
+    );
+}
+
+export default function PropertyViewPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-brand-navy flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-brand-gold"></div>
+            </div>
+        }>
+            <PropertyViewContent />
+        </Suspense>
     );
 }
