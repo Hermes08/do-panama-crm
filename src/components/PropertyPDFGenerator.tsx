@@ -448,9 +448,9 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                         </div>
                     </div>
                 </div>
-            )
+            )}
 
-{/* Translated Data */}
+            {/* Translated Data */}
             {
                 translatedData && (
                     <div className="glass-card p-6 space-y-4 border-2 border-gleec-cyan/30">
