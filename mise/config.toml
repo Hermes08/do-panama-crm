@@ -1,4 +1,3 @@
 [tools]
-python = "3.12.7"
-ruby = "3.3.5"
-go = "1.22.5"
+# Node.js version is managed by Netlify automatically
+# No Ruby or Python needed for this Next.js project
