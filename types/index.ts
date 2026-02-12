@@ -35,3 +35,30 @@ export interface ClientVersion {
     snapshot_data: Client;
     created_at: string;
 }
+
+export interface PropertyData {
+    title: string;
+    price: string;
+    location: string;
+    bedrooms?: string;
+    bathrooms?: string;
+    area?: string;
+    description: string;
+    features: string[];
+    images: string[];
+    source: string;
+}
+
+export interface PropertyPresentation {
+    id: string;
+    user_id: string | null;
+    title: string;
+    slug: string;
+    data: PropertyData;
+    views: number;
+    created_at: string;
+    updated_at: string;
+    is_public: boolean;
+    password: string | null;
+    expires_at: string | null;
+}

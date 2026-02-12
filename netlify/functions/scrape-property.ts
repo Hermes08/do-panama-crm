@@ -125,12 +125,39 @@ function removePrivateInfo(text: string): string {
     const companies = [
         'RE/MAX', 'REMAX', 'Century 21', 'Engel & Völkers', 'Sotheby\'s',
         'Coldwell Banker', 'Keller Williams', 'ERA', 'Berkshire Hathaway',
-        'Inmobiliaria', 'Real Estate', 'Bienes Raíces'
+        'Inmobiliaria', 'Real Estate', 'Bienes Raíces', 'Realty', 'Properties',
+        'Servicios Inmobiliarios', 'Grupo Inmobiliario', 'Asesores', 'Realtor',
+        'Corredor', 'Broker'
     ];
 
     for (const company of companies) {
-        const regex = new RegExp(company, 'gi');
+        // More aggressive company removal: remove the whole line if it contains the company name
+        const regex = new RegExp(`.*${company}.*`, 'gi');
         cleaned = cleaned.replace(regex, '');
+    }
+
+    // Remove social media handles and links
+    cleaned = cleaned.replace(/@[\w.]+/g, '');
+    cleaned = cleaned.replace(/(?:instagram|facebook|twitter|linkedin)\.com\/[\w.]+/gi, '');
+    cleaned = cleaned.replace(/(?:ig|fb|tw|li)\s*:?\s*@?[\w.]+/gi, '');
+
+    // Remove "Contact" blocks more aggressively
+    // Look for lines that look like contact info
+    const contactLines = [
+        /Para m[áa]s informaci[oó]n.*/gi,
+        /For more information.*/gi,
+        /Contact me.*/gi,
+        /Cont[áa]ctame.*/gi,
+        /Agenda tu cita.*/gi,
+        /Schedule a visit.*/gi,
+        /Interesado.*/gi,
+        /Interested.*/gi,
+        /Hablemos.*/gi,
+        /Let's talk.*/gi
+    ];
+
+    for (const pattern of contactLines) {
+        cleaned = cleaned.replace(pattern, '');
     }
 
     // Clean up extra spaces and punctuation

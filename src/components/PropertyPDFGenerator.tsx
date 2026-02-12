@@ -7,6 +7,9 @@ import { generatePropertyPDF } from "@/lib/pdfGenerator";
 import { generatePropertyVideo } from "@/lib/videoGenerator";
 import PropertyDataEditor from "@/components/PropertyDataEditor";
 import ImageManager from "@/components/ImageManager";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { useRouter } from "next/navigation";
+import { generateSlug } from "@/lib/slugify";
 
 interface PropertyData {
     title: string;
@@ -35,6 +38,9 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
     const [propertyData, setPropertyData] = useState<PropertyData | null>(null);
     const [translatedData, setTranslatedData] = useState<PropertyData | null>(null);
     const [customImages, setCustomImages] = useState<string[]>([]);
+
+    const router = useRouter();
+    const supabase = createClientComponentClient();
 
     const [error, setError] = useState("");
     const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
@@ -224,16 +230,41 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
         URL.revokeObjectURL(url);
     };
 
-    const handleViewPresentation = () => {
+    const handleViewPresentation = async () => {
         const dataToUse = translatedData || propertyData;
         if (!dataToUse) return;
 
-        // Store for current session
-        localStorage.setItem("temp_property_data", JSON.stringify({
-            ...dataToUse,
-            images: customImages.length > 0 ? customImages : dataToUse.images
-        }));
-        window.open("/property/view", "_blank");
+        try {
+            setLoading(true);
+
+            // Get current user
+            const { data: { user } } = await supabase.auth.getUser();
+
+            const slug = generateSlug(dataToUse.title);
+
+            const { error } = await supabase
+                .from('property_presentations')
+                .insert({
+                    user_id: user?.id,
+                    title: dataToUse.title,
+                    slug: slug,
+                    data: {
+                        ...dataToUse,
+                        images: customImages.length > 0 ? customImages : dataToUse.images
+                    },
+                    is_public: true
+                });
+
+            if (error) throw error;
+
+            // Redirect to new page
+            router.push(`/p/${slug}`);
+
+        } catch (err: any) {
+            console.error('Error creating presentation:', err);
+            setError('Failed to create presentation: ' + err.message);
+            setLoading(false);
+        }
     };
 
     return (
