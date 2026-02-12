@@ -81,6 +81,11 @@ export const handler: Handler = async (event: HandlerEvent) => {
         // ULTRA AGGRESSIVE MULTI-STRATEGY EXTRACTION
         const propertyData = extractWithMultipleStrategies($, url, html);
 
+        // EXTRA CLEANING: If FireCrawl provided markdown, use it to pick a cleaner description
+        if (fcData.data.markdown && (!propertyData.description || propertyData.description.length < 100)) {
+            propertyData.description = fcData.data.markdown.substring(0, 1500);
+        }
+
         return {
             statusCode: 200,
             headers,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Download, Loader2, CheckCircle, XCircle, Image as ImageIcon, Video } from "lucide-react";
+import { FileText, Download, Loader2, CheckCircle, XCircle, Image as ImageIcon, Video, Sparkles, Zap, ExternalLink } from "lucide-react";
 import { translatePropertyData } from "@/lib/translator";
 import { generatePropertyPDF } from "@/lib/pdfGenerator";
 import { generatePropertyVideo } from "@/lib/videoGenerator";
@@ -220,6 +220,18 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
         URL.revokeObjectURL(url);
     };
 
+    const handleViewPresentation = () => {
+        const dataToUse = translatedData || propertyData;
+        if (!dataToUse) return;
+
+        // Store for current session
+        localStorage.setItem("temp_property_data", JSON.stringify({
+            ...dataToUse,
+            images: customImages.length > 0 ? customImages : dataToUse.images
+        }));
+        window.open("/property/view", "_blank");
+    };
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -258,24 +270,34 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
 
             {/* Feature Showcase / Empty State */}
             {!propertyData && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="glass-card p-6 border border-white/5 hover:border-brand-gold/30 transition-colors group">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="glass-card p-6 border border-white/5 hover:border-brand-gold/30 transition-colors group bg-brand-gold/5">
+                        <div className="w-12 h-12 bg-brand-gold/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <Sparkles className="w-6 h-6 text-brand-gold" />
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-2">Web Presentation</h3>
+                        <p className="text-white/60 text-sm">
+                            Premium digital brochure with perfect character encoding (ñ, á, m²) and responsive mobile design.
+                        </p>
+                    </div>
+
+                    <div className="glass-card p-6 border border-white/5 hover:border-blue-500/30 transition-colors group bg-blue-500/5">
                         <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                             <FileText className="w-6 h-6 text-blue-400" />
                         </div>
                         <h3 className="text-xl font-bold text-white mb-2">Professional PDF</h3>
                         <p className="text-white/60 text-sm">
-                            Generate high-quality PDF presentations with the new "Sky & Slate" design. Perfect for client emails.
+                            Generate classic PDF dossiers with the "Sky & Slate" design. Perfect for offline sharing.
                         </p>
                     </div>
 
-                    <div className="glass-card p-6 border border-white/5 hover:border-brand-gold/30 transition-colors group">
+                    <div className="glass-card p-6 border border-white/5 hover:border-purple-500/30 transition-colors group bg-purple-500/5">
                         <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                             <Video className="w-6 h-6 text-purple-400" />
                         </div>
                         <h3 className="text-xl font-bold text-white mb-2">Video Reels</h3>
                         <p className="text-white/60 text-sm">
-                            Create engaging 60s video slideshows with music and animations. Ideal for Instagram & WhatsApp Status.
+                            Create engaging 60s video slideshows with music and transitions for WhatsApp and Social Media.
                         </p>
                     </div>
 
@@ -416,12 +438,21 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
 
             {/* Generate Actions */}
             {propertyData && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-white/10 pt-8">
+                    {/* WEB VIEW Action - PRIMARY */}
+                    <button
+                        onClick={handleViewPresentation}
+                        className="col-span-full glass-btn bg-brand-gold text-brand-navy border-brand-gold hover:bg-white font-bold text-xl flex items-center justify-center gap-3 py-6 shadow-[0_0_30px_rgba(234,179,8,0.2)] hover:scale-[1.01] transition-all"
+                    >
+                        <Sparkles className="w-7 h-7" />
+                        {lang === 'es' ? 'VER PRESENTACIÓN WEB (PREMIUM)' : 'VIEW WEB PRESENTATION (PREMIUM)'}
+                    </button>
+
                     {/* PDF Action */}
                     <button
                         onClick={handleGeneratePDF}
                         disabled={loading || generatingVideo}
-                        className="glass-btn bg-brand-gold/20 text-brand-gold border-brand-gold/50 hover:bg-brand-gold hover:text-black font-bold text-lg disabled:opacity-50 flex items-center justify-center gap-2 py-4"
+                        className="glass-btn bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-500 hover:text-white font-bold text-lg disabled:opacity-50 flex items-center justify-center gap-2 py-4"
                     >
                         {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
                         {t.generateBtn}
@@ -431,7 +462,7 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                     <button
                         onClick={handleGenerateVideo}
                         disabled={loading || generatingVideo}
-                        className="glass-btn bg-gleec-purple/20 text-gleec-purple border-gleec-purple/50 hover:bg-gleec-purple hover:text-white font-bold text-lg disabled:opacity-50 flex items-center justify-center gap-2 py-4"
+                        className="glass-btn bg-purple-500/20 text-purple-400 border-purple-500/50 hover:bg-purple-500 hover:text-white font-bold text-lg disabled:opacity-50 flex items-center justify-center gap-2 py-4"
                     >
                         {generatingVideo ? (
                             <>
@@ -446,6 +477,15 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                                 {t.generateVideoBtn}
                             </>
                         )}
+                    </button>
+
+                    {/* Persistence Action (Placeholder for now) */}
+                    <button
+                        className="glass-btn bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20 font-bold text-lg flex items-center justify-center gap-2 py-4"
+                        onClick={() => alert(lang === 'es' ? 'Próximamente: Guardar enlace permanente' : 'Coming soon: Save permanent link')}
+                    >
+                        <ExternalLink className="w-5 h-5" />
+                        {lang === 'es' ? 'Guardar Enlace' : 'Save Link'}
                     </button>
 
                     {pdfBlob && (
