@@ -185,7 +185,12 @@ function getSchemaForUrl(url: string): any | null {
 function mapStructuredDataToPropertyData(data: any, url: string): PropertyData | null {
     if (!data || !data.titulo) return null;
 
-    const hostname = new URL(url).hostname.replace('www.', '');
+    let hostname = "unknown";
+    try {
+        hostname = new URL(url).hostname.replace('www.', '');
+    } catch (e) {
+        console.error("Error parsing URL in mapStructuredDataToPropertyData:", e);
+    }
 
     // Extract bedrooms, bathrooms, area from detalles/caracteristicas
     let bedrooms: string | undefined;
