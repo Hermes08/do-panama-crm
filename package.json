@@ -12,6 +12,7 @@
     "@netlify/functions": "^5.1.2",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
+    "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/supabase-js": "^2.93.3",
     "@types/cheerio": "^0.22.35",
     "ai": "^6.0.67",
