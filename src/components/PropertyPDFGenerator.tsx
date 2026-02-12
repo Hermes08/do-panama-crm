@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Download, Upload, Loader2, CheckCircle, XCircle, Image as ImageIcon } from "lucide-react";
+import { FileText, Download, Loader2, CheckCircle, XCircle, Image as ImageIcon, Video } from "lucide-react";
 import { translatePropertyData } from "@/lib/translator";
 import { generatePropertyPDF } from "@/lib/pdfGenerator";
+import { generatePropertyVideo } from "@/lib/videoGenerator";
 
 interface PropertyData {
     title: string;
@@ -26,21 +27,30 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
     const [url, setUrl] = useState("");
     const [loading, setLoading] = useState(false);
     const [translating, setTranslating] = useState(false);
+    const [generatingVideo, setGeneratingVideo] = useState(false);
+    const [videoProgress, setVideoProgress] = useState(0);
+
     const [propertyData, setPropertyData] = useState<PropertyData | null>(null);
     const [translatedData, setTranslatedData] = useState<PropertyData | null>(null);
     const [customImages, setCustomImages] = useState<string[]>([]);
+
     const [error, setError] = useState("");
     const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+    const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
+
     const [showPdfPreview, setShowPdfPreview] = useState(false);
+    const [showVideoPreview, setShowVideoPreview] = useState(false);
 
     const t = lang === 'es' ? {
-        title: "Generador de PDFs de Propiedades",
-        subtitle: "Extrae datos de propiedades y crea presentaciones profesionales",
+        title: "Generador de Presentaciones (PDF & Video)",
+        subtitle: "Extrae datos y crea presentaciones profesionales en PDF o Video",
         urlPlaceholder: "Pega el link de la propiedad (MLS, Encuentra24, James Edition)",
         extractBtn: "Extraer Datos",
         translateBtn: "Traducir al Inglés",
         generateBtn: "Generar PDF",
+        generateVideoBtn: "Generar Video",
         downloadBtn: "Descargar PDF",
+        downloadVideoBtn: "Descargar Video",
         uploadImages: "Subir Imágenes Personalizadas",
         originalData: "Datos Originales",
         translatedData: "Datos Traducidos",
@@ -52,14 +62,17 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
         description: "Descripción",
         features: "Características",
         images: "Imágenes",
+        generatingVideo: "Generando Video...",
     } : {
-        title: "Property PDF Generator",
-        subtitle: "Extract property data and create professional presentations",
+        title: "Property Presentation Generator (PDF & Video)",
+        subtitle: "Extract data and create professional PDF or Video presentations",
         urlPlaceholder: "Paste property link (MLS, Encuentra24, James Edition)",
         extractBtn: "Extract Data",
         translateBtn: "Translate to English",
         generateBtn: "Generate PDF",
+        generateVideoBtn: "Generate Video",
         downloadBtn: "Download PDF",
+        downloadVideoBtn: "Download Video",
         uploadImages: "Upload Custom Images",
         originalData: "Original Data",
         translatedData: "Translated Data",
@@ -71,6 +84,7 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
         description: "Description",
         features: "Features",
         images: "Images",
+        generatingVideo: "Generating Video...",
     };
 
     const handleExtract = async () => {
@@ -79,6 +93,7 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
         setPropertyData(null);
         setTranslatedData(null);
         setPdfBlob(null);
+        setVideoBlob(null);
 
         try {
             const response = await fetch("/.netlify/functions/scrape-property", {
@@ -153,19 +168,54 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
             setPdfBlob(blob);
             setShowPdfPreview(true); // Show preview modal
         } catch (err) {
+            console.error(err);
             setError("PDF generation failed");
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDownload = () => {
+    const handleGenerateVideo = async () => {
+        const dataToUse = translatedData || propertyData;
+        if (!dataToUse) return;
+
+        setGeneratingVideo(true);
+        setVideoProgress(0);
+        setError("");
+
+        try {
+            // Pass the progress callback
+            const blob = await generatePropertyVideo(dataToUse, customImages, (progress) => {
+                setVideoProgress(Math.round(progress * 100));
+            });
+            setVideoBlob(blob);
+            setShowVideoPreview(true);
+        } catch (err) {
+            console.error(err);
+            setError("Video generation failed: " + (err instanceof Error ? err.message : "Unknown error"));
+        } finally {
+            setGeneratingVideo(false);
+        }
+    };
+
+    const handleDownloadPDF = () => {
         if (!pdfBlob) return;
 
         const url = URL.createObjectURL(pdfBlob);
         const link = document.createElement("a");
         link.href = url;
         link.download = `property_${Date.now()}.pdf`;
+        link.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleDownloadVideo = () => {
+        if (!videoBlob) return;
+
+        const url = URL.createObjectURL(videoBlob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `property_video_${Date.now()}.webm`;
         link.click();
         URL.revokeObjectURL(url);
     };
@@ -310,23 +360,57 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                 </div>
             )}
 
-            {/* Generate & Download */}
+            {/* Generate Actions */}
             {propertyData && (
-                <div className="flex gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* PDF Action */}
                     <button
                         onClick={handleGeneratePDF}
-                        disabled={loading}
-                        className="flex-1 glass-btn bg-brand-gold/20 text-brand-gold border-brand-gold/50 hover:bg-brand-gold hover:text-black font-bold text-lg disabled:opacity-50"
+                        disabled={loading || generatingVideo}
+                        className="glass-btn bg-brand-gold/20 text-brand-gold border-brand-gold/50 hover:bg-brand-gold hover:text-black font-bold text-lg disabled:opacity-50 flex items-center justify-center gap-2 py-4"
                     >
-                        {loading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : t.generateBtn}
+                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
+                        {t.generateBtn}
                     </button>
+
+                    {/* Video Action */}
+                    <button
+                        onClick={handleGenerateVideo}
+                        disabled={loading || generatingVideo}
+                        className="glass-btn bg-gleec-purple/20 text-gleec-purple border-gleec-purple/50 hover:bg-gleec-purple hover:text-white font-bold text-lg disabled:opacity-50 flex items-center justify-center gap-2 py-4"
+                    >
+                        {generatingVideo ? (
+                            <>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                <span className="text-sm ml-2">
+                                    {videoProgress}%
+                                </span>
+                            </>
+                        ) : (
+                            <>
+                                <Video className="w-5 h-5" />
+                                {t.generateVideoBtn}
+                            </>
+                        )}
+                    </button>
+
                     {pdfBlob && (
                         <button
-                            onClick={handleDownload}
-                            className="flex-1 glass-btn bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold text-lg flex items-center justify-center gap-2"
+                            onClick={handleDownloadPDF}
+                            className="col-span-full md:col-span-1 glass-btn bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold text-lg flex items-center justify-center gap-2"
                         >
                             <Download className="w-5 h-5" />
                             {t.downloadBtn}
+                        </button>
+                    )}
+
+                    {videoBlob && (
+                        <button
+                            onClick={handleDownloadVideo}
+                            className="col-span-full md:col-span-1 glass-btn bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold text-lg flex items-center justify-center gap-2"
+                        >
+                            <Download className="w-5 h-5" />
+                            {t.downloadVideoBtn}
                         </button>
                     )}
                 </div>
@@ -334,8 +418,8 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
 
             {/* PDF Preview Modal */}
             {showPdfPreview && pdfBlob && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-                    <div className="glass-card p-6 w-full max-w-4xl max-h-[90vh] flex flex-col">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div className="glass-card p-6 w-full max-w-4xl h-[90vh] flex flex-col">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-xl font-bold text-white">PDF Preview</h3>
                             <button
@@ -349,7 +433,7 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                         <div className="flex-1 bg-black/50 rounded-lg overflow-hidden mb-4">
                             <iframe
                                 src={URL.createObjectURL(pdfBlob)}
-                                className="w-full h-full min-h-[500px]"
+                                className="w-full h-full"
                                 title="PDF Preview"
                             />
                         </div>
@@ -363,13 +447,58 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                             </button>
                             <button
                                 onClick={() => {
-                                    handleDownload();
+                                    handleDownloadPDF();
                                     setShowPdfPreview(false);
                                 }}
                                 className="flex-1 glass-btn bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500 hover:text-white font-bold flex items-center justify-center gap-2"
                             >
                                 <Download className="w-5 h-5" />
                                 {t.downloadBtn}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Video Preview Modal */}
+            {showVideoPreview && videoBlob && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div className="glass-card p-6 w-full max-w-4xl flex flex-col">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-bold text-white">Video Preview</h3>
+                            <button
+                                onClick={() => setShowVideoPreview(false)}
+                                className="text-white/70 hover:text-white"
+                            >
+                                <XCircle className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="aspect-video bg-black rounded-lg overflow-hidden mb-4 border border-white/10 relative group">
+                            <video
+                                src={URL.createObjectURL(videoBlob)}
+                                controls
+                                className="w-full h-full"
+                                autoPlay
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowVideoPreview(false)}
+                                className="flex-1 glass-btn bg-white/10 text-white border-white/20 hover:bg-white/20"
+                            >
+                                Close Preview
+                            </button>
+                            <button
+                                onClick={() => {
+                                    handleDownloadVideo();
+                                    setShowVideoPreview(false);
+                                }}
+                                className="flex-1 glass-btn bg-gleec-purple/20 text-gleec-purple border-gleec-purple/50 hover:bg-gleec-purple hover:text-white font-bold flex items-center justify-center gap-2"
+                            >
+                                <Download className="w-5 h-5" />
+                                {t.downloadVideoBtn}
                             </button>
                         </div>
                     </div>
