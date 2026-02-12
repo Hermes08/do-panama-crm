@@ -243,6 +243,145 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
     };
 }
 
+// Extract property images with site-specific selectors
+function extractPropertyImages($: ReturnType<typeof cheerio.load>, url: string): string[] {
+    const images: string[] = [];
+    const seenImages = new Set<string>();
+
+    const hostname = new URL(url).hostname.replace('www.', '');
+
+    // 1. Always try OG Image first (usually the main property image)
+    const ogImg = $('meta[property="og:image"]').attr('content');
+    if (ogImg && !seenImages.has(ogImg)) {
+        images.push(ogImg);
+        seenImages.add(ogImg);
+    }
+
+    // 2. Site-specific gallery selectors
+    let gallerySelectors: string[] = [];
+
+    if (hostname.includes('encuentra24.com')) {
+        gallerySelectors = [
+            '.gallery-image img',
+            '.carousel-item img',
+            '.property-gallery img',
+            '.photo-gallery img',
+            '[class*="gallery"] img',
+            '[class*="slider"] img',
+            '[id*="gallery"] img'
+        ];
+    } else if (hostname.includes('jamesedition.com')) {
+        gallerySelectors = [
+            '.gallery img',
+            '.image-gallery img',
+            '[class*="Gallery"] img',
+            '[class*="carousel"] img',
+            '.listing-images img'
+        ];
+    } else if (hostname.includes('compreoalquile.com')) {
+        gallerySelectors = [
+            '.gallery img',
+            '.property-images img',
+            '[class*="gallery"] img',
+            '[class*="slider"] img'
+        ];
+    } else if (hostname.includes('mlsacobir.com')) {
+        gallerySelectors = [
+            '.property-gallery img',
+            '.listing-gallery img',
+            '[class*="gallery"] img',
+            '[class*="photo"] img'
+        ];
+    } else {
+        // Generic gallery selectors for unknown sites
+        gallerySelectors = [
+            '[class*="gallery"] img',
+            '[class*="Gallery"] img',
+            '[id*="gallery"] img',
+            '[class*="slider"] img',
+            '[class*="carousel"] img',
+            '[class*="photo"] img',
+            'main img',
+            '.content img',
+            '#content img'
+        ];
+    }
+
+    // Try each selector in order
+    for (const selector of gallerySelectors) {
+        $(selector).each((_, el) => {
+            const src = $(el).attr('src') ||
+                $(el).attr('data-src') ||
+                $(el).attr('data-original') ||
+                $(el).attr('data-lazy') ||
+                $(el).attr('data-image');
+
+            if (src && isValidPropertyImage(src) && !seenImages.has(src)) {
+                images.push(src);
+                seenImages.add(src);
+            }
+        });
+
+        // If we found good images, stop searching
+        if (images.length >= 5) break;
+    }
+
+    // 3. Fallback: If still no images, try all images but with strict filtering
+    if (images.length < 3) {
+        $('img').each((_, el) => {
+            const src = $(el).attr('src') || $(el).attr('data-src');
+            if (src && isValidPropertyImage(src) && !seenImages.has(src)) {
+                // Additional size check - property images are usually larger
+                const width = parseInt($(el).attr('width') || '0');
+                const height = parseInt($(el).attr('height') || '0');
+
+                // Skip small images (likely icons/logos)
+                if (width > 200 || height > 200 || (!width && !height)) {
+                    images.push(src);
+                    seenImages.add(src);
+                }
+            }
+        });
+    }
+
+    return images.slice(0, 15); // Return up to 15 images
+}
+
+// Validate if an image URL is likely a property image
+function isValidPropertyImage(src: string): boolean {
+    if (!src) return false;
+
+    // Must be a full URL
+    if (!src.startsWith('http')) return false;
+
+    // Exclude common non-property images
+    const excludePatterns = [
+        'logo', 'icon', 'avatar', 'badge', 'button',
+        'banner', 'ad', 'advertisement', 'sponsor',
+        'facebook', 'twitter', 'instagram', 'whatsapp',
+        'pixel', 'tracking', 'analytics',
+        '1x1', 'spacer', 'blank',
+        'favicon', 'sprite'
+    ];
+
+    const srcLower = src.toLowerCase();
+    for (const pattern of excludePatterns) {
+        if (srcLower.includes(pattern)) return false;
+    }
+
+    // Must be an image file
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+    const hasImageExtension = imageExtensions.some(ext => srcLower.includes(ext));
+
+    // Allow if has image extension OR is from a CDN (CDNs often don't show extensions)
+    const isCDN = srcLower.includes('cloudinary') ||
+        srcLower.includes('imgix') ||
+        srcLower.includes('cloudfront') ||
+        srcLower.includes('akamai');
+
+    return hasImageExtension || isCDN;
+}
+
 export const handler: Handler = async (event: HandlerEvent) => {
     const headers = {
         "Access-Control-Allow-Origin": "*",
@@ -349,28 +488,8 @@ export const handler: Handler = async (event: HandlerEvent) => {
                 // Extract images from HTML if available
                 if (fcData.data.html) {
                     const $ = cheerio.load(fcData.data.html);
-                    const images: string[] = [];
-                    const seenImages = new Set<string>();
-
-                    // OG Image
-                    const ogImg = $('meta[property="og:image"]').attr('content');
-                    if (ogImg && !seenImages.has(ogImg)) {
-                        images.push(ogImg);
-                        seenImages.add(ogImg);
-                    }
-
-                    // Gallery Images
-                    $("img").each((_, el) => {
-                        const src = $(el).attr("src") || $(el).attr("data-src") || $(el).attr("data-original");
-                        if (src && src.startsWith("http") && !seenImages.has(src)) {
-                            if (!src.includes("logo") && !src.includes("icon") && !src.includes("avatar")) {
-                                images.push(src);
-                                seenImages.add(src);
-                            }
-                        }
-                    });
-
-                    propertyData.images = images.slice(0, 10);
+                    propertyData.images = extractPropertyImages($, url);
+                    console.log(`Extracted ${propertyData.images.length} property images`);
                 }
             }
 
@@ -666,27 +785,7 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
     }
 
     // ========== IMAGES ==========
-    const images: string[] = [];
-    const seenImages = new Set<string>();
-
-    // 1. OG Image
-    const ogImg = $('meta[property="og:image"]').attr('content');
-    if (ogImg && !seenImages.has(ogImg)) {
-        images.push(ogImg);
-        seenImages.add(ogImg);
-    }
-
-    // 2. Gallery Images (Generic)
-    $("img").each((_, el) => {
-        const src = $(el).attr("src") || $(el).attr("data-src") || $(el).attr("data-original");
-        if (src && src.startsWith("http") && !seenImages.has(src)) {
-            // Filter out small icons/logos
-            if (!src.includes("logo") && !src.includes("icon") && !src.includes("avatar")) {
-                images.push(src);
-                seenImages.add(src);
-            }
-        }
-    });
+    const images = extractPropertyImages($, url);
 
     return {
         title: cleanText(title),
@@ -697,7 +796,7 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
         area: area ? cleanText(area) : undefined,
         description: cleanText(description),
         features: features.slice(0, 15), // Limit features (already cleaned)
-        images: images.slice(0, 10), // Limit images
+        images: images, // Already limited in extractPropertyImages
         source: new URL(url).hostname
     };
 }
