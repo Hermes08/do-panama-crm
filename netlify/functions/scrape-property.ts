@@ -14,6 +14,75 @@ interface PropertyData {
     source: string;
 }
 
+// Helper function to decode HTML entities and preserve UTF-8 characters
+function decodeHTMLEntities(text: string): string {
+    const entities: Record<string, string> = {
+        '&amp;': '&',
+        '&lt;': '<',
+        '&gt;': '>',
+        '&quot;': '"',
+        '&#39;': "'",
+        '&apos;': "'",
+        '&nbsp;': ' ',
+        '&ntilde;': 'ñ',
+        '&Ntilde;': 'Ñ',
+        '&aacute;': 'á',
+        '&eacute;': 'é',
+        '&iacute;': 'í',
+        '&oacute;': 'ó',
+        '&uacute;': 'ú',
+        '&Aacute;': 'Á',
+        '&Eacute;': 'É',
+        '&Iacute;': 'Í',
+        '&Oacute;': 'Ó',
+        '&Uacute;': 'Ú',
+        '&uuml;': 'ü',
+        '&Uuml;': 'Ü',
+        '&iexcl;': '¡',
+        '&iquest;': '¿',
+        '&#178;': '²',
+        '&#179;': '³',
+        '&sup2;': '²',
+        '&sup3;': '³',
+        '&deg;': '°',
+    };
+
+    let decoded = text;
+
+    // Replace named entities
+    for (const [entity, char] of Object.entries(entities)) {
+        decoded = decoded.replace(new RegExp(entity, 'g'), char);
+    }
+
+    // Replace numeric entities (&#XXXX;)
+    decoded = decoded.replace(/&#(\d+);/g, (match, dec) => {
+        return String.fromCharCode(parseInt(dec, 10));
+    });
+
+    // Replace hex entities (&#xXXXX;)
+    decoded = decoded.replace(/&#x([0-9A-Fa-f]+);/g, (match, hex) => {
+        return String.fromCharCode(parseInt(hex, 16));
+    });
+
+    return decoded;
+}
+
+// Clean and normalize text
+function cleanText(text: string): string {
+    if (!text) return '';
+
+    // Decode HTML entities first
+    let cleaned = decodeHTMLEntities(text);
+
+    // Remove excessive whitespace but preserve single spaces
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+    // Remove any remaining control characters except newlines
+    cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+    return cleaned;
+}
+
 export const handler: Handler = async (event: HandlerEvent) => {
     const headers = {
         "Access-Control-Allow-Origin": "*",
@@ -110,10 +179,10 @@ function trySelectors($: ReturnType<typeof cheerio.load>, selectors: string[], a
         try {
             if (attr) {
                 const val = $(sel).attr(attr);
-                if (val && val.trim().length > 0) return val.trim();
+                if (val && val.trim().length > 0) return cleanText(val);
             } else {
-                const val = $(sel).first().text().trim();
-                if (val && val.length > 0) return val;
+                const val = $(sel).first().text();
+                if (val && val.trim().length > 0) return cleanText(val);
             }
         } catch (e) { /* continue */ }
     }
@@ -160,9 +229,9 @@ function tryMetaTags($: ReturnType<typeof cheerio.load>, properties: string[]): 
     for (const prop of properties) {
         try {
             let val = $(`meta[property="${prop}"]`).attr("content");
-            if (val) return val.trim();
+            if (val) return cleanText(val);
             val = $(`meta[name="${prop}"]`).attr("content");
-            if (val) return val.trim();
+            if (val) return cleanText(val);
         } catch (e) { /* continue */ }
     }
     return "";
@@ -170,11 +239,11 @@ function tryMetaTags($: ReturnType<typeof cheerio.load>, properties: string[]): 
 
 // STRATEGY 5: Text Content Analysis
 function findInText($: ReturnType<typeof cheerio.load>, keywords: string[], minLength = 3): string {
-    const allText = $("body").text();
+    const allText = cleanText($("body").text());
     for (const keyword of keywords) {
         const regex = new RegExp(`${keyword}[:\\s]*([^\\n<>]{${minLength},100})`, "i");
         const match = allText.match(regex);
-        if (match && match[1]) return match[1].trim();
+        if (match && match[1]) return cleanText(match[1]);
     }
     return "";
 }
@@ -296,7 +365,7 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
     if (!description || description.length < 100) {
         let maxLen = 0;
         $("p").each((_, el) => {
-            const text = $(el).text().trim();
+            const text = cleanText($(el).text());
             if (text.length > maxLen && text.length > 50 &&
                 !text.toLowerCase().includes("cookie") &&
                 !text.toLowerCase().includes("privacy") &&
@@ -316,7 +385,7 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
 
     // Strategy: Look for UL/LI inside main content areas only
     $("main, .content, #content, .details").find("li").each((_, el) => {
-        const text = $(el).text().trim().replace(/\s+/g, ' ').substring(0, 60);
+        const text = cleanText($(el).text()).substring(0, 60);
         if (isValidFeature(text) && !seenFeatures.has(text.toLowerCase())) {
             seenFeatures.add(text.toLowerCase());
             features.push(text);
@@ -326,7 +395,7 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
     if (features.length === 0) {
         // Fallback to global LI if safe
         $("li").each((_, el) => {
-            const text = $(el).text().trim().replace(/\s+/g, ' ').substring(0, 60);
+            const text = cleanText($(el).text()).substring(0, 60);
             if (isValidFeature(text) && !seenFeatures.has(text.toLowerCase()) &&
                 !["home", "about", "contact", "login"].includes(text.toLowerCase())) {
                 seenFeatures.add(text.toLowerCase());
@@ -359,38 +428,39 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
     });
 
     return {
-        title,
-        price,
-        location,
-        bedrooms,
-        bathrooms,
-        area,
-        description,
-        features: features.slice(0, 15), // Limit features
+        title: cleanText(title),
+        price: cleanText(price),
+        location: cleanText(location),
+        bedrooms: bedrooms ? cleanText(bedrooms) : undefined,
+        bathrooms: bathrooms ? cleanText(bathrooms) : undefined,
+        area: area ? cleanText(area) : undefined,
+        description: cleanText(description),
+        features: features.slice(0, 15), // Limit features (already cleaned)
         images: images.slice(0, 10), // Limit images
         source: new URL(url).hostname
     };
 }
 
 function extractEncuentra24($: ReturnType<typeof cheerio.load>, html: string): Partial<PropertyData> {
-    const title = $("h1").first().text().trim();
-    const price = $(".price, [class*='price']").first().text().trim() ||
-        $("div:contains('Precio')").next().text().trim();
+    const title = cleanText($("h1").first().text());
+    const price = cleanText($(".price, [class*='price']").first().text() ||
+        $("div:contains('Precio')").next().text());
 
-    const location = $(".location, [class*='address']").first().text().trim() ||
-        $("div:contains('Ubicación')").next().text().trim();
+    const location = cleanText($(".location, [class*='address']").first().text() ||
+        $("div:contains('Ubicación')").next().text());
 
     // Specific to Encuentra24 structure
-    const bedrooms = $(".info-details .bedrooms, .info-details:contains('Recámaras') .value").text().trim();
-    const bathrooms = $(".info-details .bathrooms, .info-details:contains('Baños') .value").text().trim();
-    const area = $(".info-details .area, .info-details:contains('m²') .value").text().trim();
+    const bedrooms = cleanText($(".info-details .bedrooms, .info-details:contains('Recámaras') .value").text());
+    const bathrooms = cleanText($(".info-details .bathrooms, .info-details:contains('Baños') .value").text());
+    const area = cleanText($(".info-details .area, .info-details:contains('m²') .value").text());
 
-    const description = $(".description-container, .description").text().trim();
+    const description = cleanText($(".description-container, .description").text());
 
     // Features in Encuentra24 are often in a specific list
     const features: string[] = [];
     $(".amenities li, .features li").each((_, el) => {
-        features.push($(el).text().trim());
+        const feature = cleanText($(el).text());
+        if (feature) features.push(feature);
     });
 
     // Images in carousel
