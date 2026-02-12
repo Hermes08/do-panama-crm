@@ -44,22 +44,38 @@ export const handler: Handler = async (event: HandlerEvent) => {
             };
         }
 
-        const response = await fetch(url, {
+        // Use FireCrawl API for robust scraping
+        const FIRECRAWL_API_KEY = "fc-c3b388c7f1e14ef8a3fa5e3334b71add"; // Provided by user
+
+        console.log("Scraping with FireCrawl:", url);
+
+        const fcResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
+            method: "POST",
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9,es;q=0.8',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Cache-Control': 'max-age=0'
-            }
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${FIRECRAWL_API_KEY}`
+            },
+            body: JSON.stringify({
+                url: url,
+                pageOptions: {
+                    onlyMainContent: false, // We need full HTML for specific selectors
+                    includeHtml: true,
+                    screenshot: false
+                }
+            })
         });
 
-        const html = await response.text();
+        if (!fcResponse.ok) {
+            throw new Error(`FireCrawl API failed: ${fcResponse.status} ${fcResponse.statusText}`);
+        }
+
+        const fcData = await fcResponse.json();
+
+        if (!fcData.success || !fcData.data) {
+            throw new Error("FireCrawl returned unsuccessful response");
+        }
+
+        const html = fcData.data.html || fcData.data.content; // Fallback to content if HTML missing
         const $ = cheerio.load(html);
 
         // ULTRA AGGRESSIVE MULTI-STRATEGY EXTRACTION
