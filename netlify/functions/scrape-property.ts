@@ -83,6 +83,153 @@ function cleanText(text: string): string {
     return cleaned;
 }
 
+// Extraction schemas for different real estate websites
+const EXTRACTION_SCHEMAS: Record<string, any> = {
+    'encuentra24.com': {
+        type: "object",
+        properties: {
+            titulo: { type: "string", description: "Título del listado" },
+            precio: { type: "string", description: "Precio de la propiedad" },
+            ubicacion: { type: "string", description: "Ubicación de la propiedad" },
+            detalles: {
+                type: "array",
+                description: "Detalles de la propiedad (habitaciones, baños, área)",
+                items: { type: "string" }
+            },
+            amenidades: {
+                type: "array",
+                description: "Amenidades de la propiedad",
+                items: { type: "string" }
+            },
+            descripcion: { type: "string", description: "Descripción completa de la propiedad" }
+        },
+        required: ["titulo", "precio"]
+    },
+    'jamesedition.com': {
+        type: "object",
+        properties: {
+            titulo: { type: "string", description: "Título del listado" },
+            precio: { type: "string", description: "Precio de la propiedad" },
+            ubicacion: { type: "string", description: "Ubicación de la propiedad" },
+            descripcion: { type: "string", description: "Descripción de la propiedad" },
+            caracteristicas: {
+                type: "array",
+                description: "Características de la propiedad",
+                items: { type: "string" }
+            },
+            amenidades: {
+                type: "array",
+                description: "Amenidades de la propiedad",
+                items: { type: "string" }
+            }
+        },
+        required: ["titulo", "precio"]
+    },
+    'compreoalquile.com': {
+        type: "object",
+        properties: {
+            titulo: { type: "string", description: "Título del listado" },
+            precio: { type: "string", description: "Precio de la propiedad" },
+            ubicacion: { type: "string", description: "Ubicación de la propiedad" },
+            detalles: {
+                type: "array",
+                description: "Detalles de la propiedad",
+                items: { type: "string" }
+            },
+            amenidades: {
+                type: "array",
+                description: "Amenidades de la propiedad",
+                items: { type: "string" }
+            }
+        },
+        required: ["titulo", "precio"]
+    },
+    'mlsacobir.com': {
+        type: "object",
+        properties: {
+            titulo: { type: "string", description: "Título del listado" },
+            precio: { type: "string", description: "Precio de la propiedad" },
+            ubicacion: { type: "string", description: "Ubicación de la propiedad" },
+            descripcion: { type: "string", description: "Descripción de la propiedad" },
+            caracteristicas: {
+                type: "array",
+                description: "Características de la propiedad",
+                items: { type: "string" }
+            },
+            amenidades: {
+                type: "array",
+                description: "Amenidades de la propiedad",
+                items: { type: "string" }
+            }
+        },
+        required: ["titulo", "precio"]
+    }
+};
+
+// Get extraction schema based on URL
+function getSchemaForUrl(url: string): any | null {
+    try {
+        const hostname = new URL(url).hostname.replace('www.', '');
+        for (const [domain, schema] of Object.entries(EXTRACTION_SCHEMAS)) {
+            if (hostname.includes(domain)) {
+                return schema;
+            }
+        }
+    } catch (e) {
+        console.error("Error parsing URL:", e);
+    }
+    return null;
+}
+
+// Map structured data from FireCrawl to PropertyData format
+function mapStructuredDataToPropertyData(data: any, url: string): PropertyData | null {
+    if (!data || !data.titulo) return null;
+
+    const hostname = new URL(url).hostname.replace('www.', '');
+
+    // Extract bedrooms, bathrooms, area from detalles/caracteristicas
+    let bedrooms: string | undefined;
+    let bathrooms: string | undefined;
+    let area: string | undefined;
+
+    const allDetails = [
+        ...(data.detalles || []),
+        ...(data.caracteristicas || [])
+    ];
+
+    for (const detail of allDetails) {
+        const detailLower = detail.toLowerCase();
+
+        // Bedrooms
+        if (!bedrooms && /\d+\s*(hab|rec[aá]mara|bedroom|cuarto|dormitorio)/i.test(detail)) {
+            bedrooms = detail;
+        }
+
+        // Bathrooms
+        if (!bathrooms && /\d+(\.\d+)?\s*(ba[ñn]o|bathroom)/i.test(detail)) {
+            bathrooms = detail;
+        }
+
+        // Area
+        if (!area && /\d+[,\d]*\s*(m[2²]|sq\.?\s*ft|metro)/i.test(detail)) {
+            area = detail;
+        }
+    }
+
+    return {
+        title: cleanText(data.titulo),
+        price: cleanText(data.precio),
+        location: cleanText(data.ubicacion || "Panama"),
+        bedrooms,
+        bathrooms,
+        area,
+        description: cleanText(data.descripcion || data.titulo),
+        features: (data.amenidades || data.caracteristicas || []).map((f: string) => cleanText(f)),
+        images: [], // Images will be extracted separately
+        source: hostname
+    };
+}
+
 export const handler: Handler = async (event: HandlerEvent) => {
     const headers = {
         "Access-Control-Allow-Origin": "*",
@@ -118,41 +265,121 @@ export const handler: Handler = async (event: HandlerEvent) => {
 
         console.log("Scraping with FireCrawl:", url);
 
-        const fcResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${FIRECRAWL_API_KEY}`
-            },
-            body: JSON.stringify({
-                url: url,
-                pageOptions: {
-                    onlyMainContent: false, // We need full HTML for specific selectors
-                    includeHtml: true,
-                    screenshot: false
+        // Check if we have a structured extraction schema for this URL
+        const extractionSchema = getSchemaForUrl(url);
+
+        let propertyData: PropertyData;
+
+        if (extractionSchema) {
+            // USE STRUCTURED EXTRACTION for supported sites
+            console.log("Using structured extraction with schema");
+
+            const fcResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${FIRECRAWL_API_KEY}`
+                },
+                body: JSON.stringify({
+                    url: url,
+                    extractorOptions: {
+                        extractionSchema: extractionSchema,
+                        mode: "llm-extraction"
+                    },
+                    pageOptions: {
+                        onlyMainContent: true,
+                        includeHtml: true // Still get HTML for image extraction
+                    }
+                })
+            });
+
+            if (!fcResponse.ok) {
+                throw new Error(`FireCrawl API failed: ${fcResponse.status} ${fcResponse.statusText}`);
+            }
+
+            const fcData = await fcResponse.json();
+
+            if (!fcData.success || !fcData.data) {
+                throw new Error("FireCrawl returned unsuccessful response");
+            }
+
+            // Map structured data to PropertyData
+            const structuredData = fcData.data.llm_extraction || fcData.data.extract;
+            const mappedData = mapStructuredDataToPropertyData(structuredData, url);
+
+            if (!mappedData) {
+                throw new Error("Failed to map structured data to PropertyData");
+            }
+
+            propertyData = mappedData;
+
+            // Extract images from HTML if available
+            if (fcData.data.html) {
+                const $ = cheerio.load(fcData.data.html);
+                const images: string[] = [];
+                const seenImages = new Set<string>();
+
+                // OG Image
+                const ogImg = $('meta[property="og:image"]').attr('content');
+                if (ogImg && !seenImages.has(ogImg)) {
+                    images.push(ogImg);
+                    seenImages.add(ogImg);
                 }
-            })
-        });
 
-        if (!fcResponse.ok) {
-            throw new Error(`FireCrawl API failed: ${fcResponse.status} ${fcResponse.statusText}`);
-        }
+                // Gallery Images
+                $("img").each((_, el) => {
+                    const src = $(el).attr("src") || $(el).attr("data-src") || $(el).attr("data-original");
+                    if (src && src.startsWith("http") && !seenImages.has(src)) {
+                        if (!src.includes("logo") && !src.includes("icon") && !src.includes("avatar")) {
+                            images.push(src);
+                            seenImages.add(src);
+                        }
+                    }
+                });
 
-        const fcData = await fcResponse.json();
+                propertyData.images = images.slice(0, 10);
+            }
 
-        if (!fcData.success || !fcData.data) {
-            throw new Error("FireCrawl returned unsuccessful response");
-        }
+        } else {
+            // FALLBACK: Use HTML scraping for unsupported sites
+            console.log("Using HTML scraping (no schema available)");
 
-        const html = fcData.data.html || fcData.data.content; // Fallback to content if HTML missing
-        const $ = cheerio.load(html);
+            const fcResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${FIRECRAWL_API_KEY}`
+                },
+                body: JSON.stringify({
+                    url: url,
+                    pageOptions: {
+                        onlyMainContent: false,
+                        includeHtml: true,
+                        screenshot: false
+                    }
+                })
+            });
 
-        // ULTRA AGGRESSIVE MULTI-STRATEGY EXTRACTION
-        const propertyData = extractWithMultipleStrategies($, url, html);
+            if (!fcResponse.ok) {
+                throw new Error(`FireCrawl API failed: ${fcResponse.status} ${fcResponse.statusText}`);
+            }
 
-        // EXTRA CLEANING: If FireCrawl provided markdown, use it to pick a cleaner description
-        if (fcData.data.markdown && (!propertyData.description || propertyData.description.length < 100)) {
-            propertyData.description = fcData.data.markdown.substring(0, 1500);
+            const fcData = await fcResponse.json();
+
+            if (!fcData.success || !fcData.data) {
+                throw new Error("FireCrawl returned unsuccessful response");
+            }
+
+            const html = fcData.data.html || fcData.data.content;
+            const $ = cheerio.load(html);
+
+            // ULTRA AGGRESSIVE MULTI-STRATEGY EXTRACTION
+            propertyData = extractWithMultipleStrategies($, url, html);
+
+            // EXTRA CLEANING: If FireCrawl provided markdown, use it to pick a cleaner description
+            if (fcData.data.markdown && (!propertyData.description || propertyData.description.length < 100)) {
+                propertyData.description = fcData.data.markdown.substring(0, 1500);
+            }
         }
 
         return {
