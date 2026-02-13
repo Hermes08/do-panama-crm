@@ -1,5 +1,7 @@
 import type { Handler, HandlerEvent } from "@netlify/functions";
 import * as cheerio from "cheerio";
+import FirecrawlApp from '@mendable/firecrawl-js';
+import { z } from 'zod';
 
 interface PropertyData {
     title: string;
@@ -15,6 +17,9 @@ interface PropertyData {
     debugLog?: string[];
 }
 
+// Global API Key
+const FIRECRAWL_API_KEY = "fc-c3b388c7f1e14ef8a3fa5e3334b71add";
+
 // Request-scoped logger helper
 function logDebug(debugLog: string[], message: string) {
     const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
@@ -23,183 +28,107 @@ function logDebug(debugLog: string[], message: string) {
     debugLog.push(msg);
 }
 
-// Helper function to decode HTML entities and preserve UTF-8 characters
+// Encode/Decode helpers
 function decodeHTMLEntities(text: string): string {
-    const entities: Record<string, string> = {
-        '&amp;': '&',
-        '&lt;': '<',
-        '&gt;': '>',
-        '&quot;': '"',
-        '&#39;': "'",
-        '&apos;': "'",
-        '&nbsp;': ' ',
-        '&ntilde;': 'ñ',
-        '&Ntilde;': 'Ñ',
-        '&aacute;': 'á',
-        '&eacute;': 'é',
-        '&iacute;': 'í',
-        '&oacute;': 'ó',
-        '&uacute;': 'ú',
-        '&Aacute;': 'Á',
-        '&Eacute;': 'É',
-        '&Iacute;': 'Í',
-        '&Oacute;': 'Ó',
-        '&Uacute;': 'Ú',
-        '&uuml;': 'ü',
-        '&Uuml;': 'Ü',
-        '&iexcl;': '¡',
-        '&iquest;': '¿',
-        '&#178;': '²',
-        '&#179;': '³',
-        '&sup2;': '²',
-        '&sup3;': '³',
-        '&deg;': '°',
-    };
-
-    let decoded = text;
-
-    // Replace named entities
-    for (const [entity, char] of Object.entries(entities)) {
-        decoded = decoded.replace(new RegExp(entity, 'g'), char);
-    }
-
-    // Replace numeric entities (&#XXXX;)
-    decoded = decoded.replace(/&#(\d+);/g, (match, dec) => {
-        return String.fromCharCode(parseInt(dec, 10));
-    });
-
-    // Replace hex entities (&#xXXXX;)
-    decoded = decoded.replace(/&#x([0-9A-Fa-f]+);/g, (match, hex) => {
-        return String.fromCharCode(parseInt(hex, 16));
-    });
-
-    return decoded;
+    if (!text) return "";
+    return text
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&nbsp;/g, ' ');
 }
 
-// Clean and normalize text
 function cleanText(text: string): string {
     if (!text) return '';
-
-    // Decode HTML entities first
     let cleaned = decodeHTMLEntities(text);
-
-    // Remove excessive whitespace but preserve single spaces
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
-
-    // Remove any remaining control characters except newlines
     cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-
     return cleaned;
 }
 
-// Remove private information (company names, agent names, phone numbers, emails)
+// Remove private information
 function removePrivateInfo(text: string): string {
     if (!text) return text;
-
     let cleaned = text;
 
-    // Remove phone numbers (various formats)
+    // Remove phone numbers
     cleaned = cleaned.replace(/(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3,4}[-.\s]?\d{4}/g, '');
-    cleaned = cleaned.replace(/\d{4}[-.\s]?\d{4}/g, ''); // Simple format: 1234-5678
+    cleaned = cleaned.replace(/\d{4}[-.\s]?\d{4}/g, '');
 
     // Remove emails
     cleaned = cleaned.replace(/[\w.-]+@[\w.-]+\.\w+/gi, '');
 
-    // Remove contact phrases (Spanish and English)
-    const contactPatterns = [
-        /contactar?\s+a?\s*:?\s*[\w\s]+/gi,
-        /contact\s+:?\s*[\w\s]+/gi,
-        /agente\s*:?\s*[\w\s]+/gi,
-        /agent\s*:?\s*[\w\s]+/gi,
-        /llamar?\s+al?\s*:?\s*[\w\s]+/gi,
-        /call\s+:?\s*[\w\s]+/gi,
-        /whatsapp\s*:?\s*[\w\s\d]+/gi,
-        /tel[eé]fono\s*:?\s*[\w\s\d]+/gi,
-        /phone\s*:?\s*[\w\s\d]+/gi,
-        /correo\s*:?\s*[\w\s@.]+/gi,
-        /email\s*:?\s*[\w\s@.]+/gi,
-    ];
-
-    for (const pattern of contactPatterns) {
-        cleaned = cleaned.replace(pattern, '');
-    }
-
-    // Remove reference codes
-    cleaned = cleaned.replace(/ref\s*\.?\s*:?\s*[\w\d-]+/gi, '');
-    cleaned = cleaned.replace(/referencia\s*:?\s*[\w\d-]+/gi, '');
-    cleaned = cleaned.replace(/\bid\s*:?\s*[\w\d-]+/gi, '');
-    cleaned = cleaned.replace(/c[oó]digo\s*:?\s*[\w\d-]+/gi, '');
-
-    // Remove common real estate company names
-    const companies = [
-        'RE/MAX', 'REMAX', 'Century 21', 'Engel & Völkers', 'Sotheby\'s',
-        'Coldwell Banker', 'Keller Williams', 'ERA', 'Berkshire Hathaway',
-        'Inmobiliaria', 'Real Estate', 'Bienes Raíces', 'Realty', 'Properties',
-        'Servicios Inmobiliarios', 'Grupo Inmobiliario', 'Asesores', 'Realtor',
-        'Corredor', 'Broker'
-    ];
-
+    // Remove common real estate terms
+    const companies = ['RE/MAX', 'Keller Williams', 'Century 21', 'Sotheby\'s', 'Coldwell Banker'];
     for (const company of companies) {
-        // More aggressive company removal: remove the whole line if it contains the company name
         const regex = new RegExp(`.*${company}.*`, 'gi');
         cleaned = cleaned.replace(regex, '');
     }
 
-    // Remove social media handles and links
-    cleaned = cleaned.replace(/@[\w.]+/g, '');
-    cleaned = cleaned.replace(/(?:instagram|facebook|twitter|linkedin)\.com\/[\w.]+/gi, '');
-    cleaned = cleaned.replace(/(?:ig|fb|tw|li)\s*:?\s*@?[\w.]+/gi, '');
-
-    // Remove "Contact" blocks more aggressively
-    // Look for lines that look like contact info
-    const contactLines = [
-        /Para m[áa]s informaci[oó]n.*/gi,
-        /For more information.*/gi,
-        /Contact me.*/gi,
-        /Cont[áa]ctame.*/gi,
-        /Agenda tu cita.*/gi,
-        /Schedule a visit.*/gi,
-        /Interesado.*/gi,
-        /Interested.*/gi,
-        /Hablemos.*/gi,
-        /Let's talk.*/gi
-    ];
-
-    for (const pattern of contactLines) {
-        cleaned = cleaned.replace(pattern, '');
-    }
-
-    // Clean up extra spaces and punctuation
-    cleaned = cleaned.replace(/\s{2,}/g, ' ');
-    cleaned = cleaned.replace(/\s+([.,;:])/g, '$1');
-    cleaned = cleaned.replace(/^[.,;:\s]+|[.,;:\s]+$/g, '');
-
     return cleaned.trim();
 }
 
-// Translate property data to English using OpenAI
+// Zod Schemas for each domain
+const Encunetra24Schema = z.object({
+    encuentra24_description: z.string().describe("Description of the property from Encuentra24"),
+    encuentra24_amenities: z.array(z.object({
+        value: z.string(),
+    })).describe("List of amenities from Encuentra24").optional(),
+    encuentra24_square_footage: z.string().describe("Square footage (metraje) of the property from Encuentra24").optional(),
+    encuentra24_price: z.string().describe("Price of the property from Encuentra24"),
+    encuentra24_bedrooms: z.string().describe("Number of bedrooms (recámaras) from Encuentra24").optional(),
+    encuentra24_bathrooms: z.string().describe("Number of bathrooms (baños) from Encuentra24").optional(),
+    encuentra24_location: z.string().describe("Location of the property").optional(),
+    encuentra24_title: z.string().describe("Title of the listing").optional(),
+});
+
+const JamesEditionSchema = z.object({
+    jamesedition_description: z.string().describe("Detailed description from JamesEdition"),
+    jamesedition_amenities: z.array(z.object({
+        value: z.string(),
+    })).describe("List of amenities from JamesEdition"),
+    jamesedition_square_footage: z.number().describe("Square footage from JamesEdition"),
+    jamesedition_price_usd: z.number().describe("Price converted to USD from JamesEdition"),
+    jamesedition_bedrooms: z.number().describe("Number of bedrooms from JamesEdition"),
+    jamesedition_bathrooms: z.number().describe("Number of bathrooms from JamesEdition").optional(),
+    jamesedition_location: z.string().describe("Location of the property").optional(),
+    jamesedition_title: z.string().describe("Title of the listing").optional(),
+});
+
+const CompreoalquileSchema = z.object({
+    description: z.string().describe("Description of the property"),
+    amenities: z.array(z.object({
+        value: z.string(),
+    })).describe("List of amenities").optional(),
+    square_footage: z.number().describe("Square footage of the property").optional(),
+    price: z.number().describe("Price of the property"),
+    bedrooms: z.number().describe("Number of bedrooms").optional(),
+    bathrooms: z.number().describe("Number of bathrooms").optional(),
+    location: z.string().describe("Location of the property").optional(),
+    title: z.string().describe("Title of the listing").optional(),
+});
+
+const MLSAcobirSchema = z.object({
+    description: z.string().describe("Description of the property"),
+    amenities: z.array(z.object({
+        value: z.string(),
+    })).describe("List of amenities"),
+    square_footage: z.number().describe("Square footage of the property"),
+    price: z.number().describe("Price of the property"),
+    bedrooms: z.number().describe("Number of bedrooms").optional(),
+    bathrooms: z.number().describe("Number of bathrooms").optional(),
+    location: z.string().describe("Property location").optional(),
+    title: z.string().describe("MLS listing title").optional(),
+});
+
+// Translation Helper
 async function translateToEnglish(data: PropertyData): Promise<PropertyData> {
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-    if (!OPENAI_API_KEY) {
-        console.warn("OPENAI_API_KEY not found, skipping translation");
-        return data;
-    }
+    if (!OPENAI_API_KEY) return data;
 
     try {
-        // Prepare content for translation
-        const contentToTranslate = {
-            title: data.title,
-            description: data.description,
-            location: data.location,
-            features: data.features || [],
-            bedrooms: data.bedrooms || '',
-            bathrooms: data.bathrooms || '',
-            area: data.area || ''
-        };
-
-        console.log("Translating to English...");
-
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -210,495 +139,28 @@ async function translateToEnglish(data: PropertyData): Promise<PropertyData> {
                 model: 'gpt-4o-mini',
                 messages: [{
                     role: 'system',
-                    content: `You are a professional real estate translator. Translate the following property listing data to English.
-                    
-CRITICAL RULES:
-- Preserve all numbers exactly as they are
-- Keep measurements (m², sq ft, etc.) unchanged
-- Maintain formatting and structure
-- Return ONLY a JSON object with the same structure
-- Do not add explanations or extra text
-- If text is already in English, keep it as is
-
-Return format:
-{
-  "title": "translated title",
-  "description": "translated description",
-  "location": "translated location",
-  "features": ["feature1", "feature2"],
-  "bedrooms": "translated bedrooms",
-  "bathrooms": "translated bathrooms",
-  "area": "translated area"
-}`
+                    content: 'Translate the following property data to English. JSON only.'
                 }, {
                     role: 'user',
-                    content: JSON.stringify(contentToTranslate)
+                    content: JSON.stringify(data)
                 }],
-                temperature: 0.3,
                 response_format: { type: "json_object" }
             })
         });
 
-        if (!response.ok) {
-            throw new Error(`OpenAI API failed: ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error("Translation failed");
         const result = await response.json();
         const translated = JSON.parse(result.choices[0].message.content);
-
-        console.log("Translation successful");
-
-        return {
-            ...data,
-            title: translated.title || data.title,
-            description: translated.description || data.description,
-            location: translated.location || data.location,
-            features: translated.features || data.features,
-            bedrooms: translated.bedrooms || data.bedrooms,
-            bathrooms: translated.bathrooms || data.bathrooms,
-            area: translated.area || data.area
-        };
-
-    } catch (error) {
-        console.error("Translation error:", error);
-        console.log("Returning original data without translation");
-        return data; // Fallback to original data
-    }
-}
-
-// Extraction schemas for different real estate websites
-const EXTRACTION_SCHEMAS: Record<string, any> = {
-    'encuentra24.com': {
-        type: "object",
-        properties: {
-            titulo: {
-                type: "string",
-                description: "Property title/headline. Extract the main property title, usually at the top of the page. Example: 'Apartamento en Venta - Punta Pacifica'"
-            },
-            precio: {
-                type: "string",
-                description: "Property price. Look for the listing price, including currency symbol. Example: '$250,000', 'US$ 350,000', 'B/. 180,000'. If price says 'Consultar' or 'Contact for price', use that exact text."
-            },
-            ubicacion: {
-                type: "string",
-                description: "Property location/address. Extract the neighborhood, district, and city. Example: 'Punta Pacifica, Panama City', 'Costa del Este, Panama'"
-            },
-            area: {
-                type: "string",
-                description: "CRITICAL: Property area/size. ALWAYS extract this. Look for total area, construction area, or lot size. Include units. Examples: '150 m²', '1,615 sq ft', '200 m² construcción'. If not found, search harder in details or description. MANDATORY."
-            },
-            detalles: {
-                type: "array",
-                description: "Property details including bedrooms, bathrooms, parking, floor, etc. Extract each detail as a separate item. Examples: '3 habitaciones', '2 baños', '2 estacionamientos', 'Piso 15'. DO NOT include area here, it goes in the 'area' field.",
-                items: { type: "string" }
-            },
-            amenidades: {
-                type: "array",
-                description: "Property amenities and features. Extract all amenities like pool, gym, security, etc. Examples: 'Piscina', 'Gimnasio', 'Seguridad 24/7', 'Área de BBQ', 'Salón de eventos'. DO NOT include contact information or agent names.",
-                items: { type: "string" }
-            },
-            descripcion: {
-                type: "string",
-                description: "Full property description. Extract the complete description text that describes the property, its features, and surroundings. DO NOT include agent contact information, phone numbers, or emails."
-            }
-        },
-        required: ["titulo", "precio", "ubicacion", "area", "descripcion"]
-    },
-    'jamesedition.com': {
-        type: "object",
-        properties: {
-            titulo: {
-                type: "string",
-                description: "Property title. Extract the main listing title. Example: 'Luxury Penthouse in Panama City', 'Oceanfront Villa'"
-            },
-            precio: {
-                type: "string",
-                description: "Property price with currency. Example: '$2,500,000', '€1,800,000', 'Price upon request'"
-            },
-            ubicacion: {
-                type: "string",
-                description: "Property location. Extract city, region, and country. Example: 'Panama City, Panama', 'Bocas del Toro, Panama'"
-            },
-            area: {
-                type: "string",
-                description: "CRITICAL: Property area/size. ALWAYS extract this. Look for interior area, total area, or lot size. Include units. Examples: '500 m²', '5,382 sq ft', '1,000 m² interior + 2,000 m² lot'. MANDATORY."
-            },
-            descripcion: {
-                type: "string",
-                description: "Complete property description. Extract the full description including property highlights, features, and location details. Exclude agent contact information."
-            },
-            caracteristicas: {
-                type: "array",
-                description: "Property characteristics and specifications. Include bedrooms, bathrooms, year built, view, etc. Examples: '5 bedrooms', '6 bathrooms', 'Built in 2020', 'Ocean view', 'Penthouse'. DO NOT include area here.",
-                items: { type: "string" }
-            },
-            amenidades: {
-                type: "array",
-                description: "Luxury amenities and features. Examples: 'Infinity pool', 'Private gym', 'Wine cellar', 'Home theater', 'Smart home system', 'Helipad'. DO NOT include contact information.",
-                items: { type: "string" }
-            }
-        },
-        required: ["titulo", "precio", "ubicacion", "area", "descripcion"]
-    },
-    'compreoalquile.com': {
-        type: "object",
-        properties: {
-            titulo: {
-                type: "string",
-                description: "Property title. Example: 'Casa en Venta - Albrook', 'Apartamento en Alquiler'"
-            },
-            precio: {
-                type: "string",
-                description: "Price or rental amount. Example: '$180,000', '$1,200/mes'"
-            },
-            ubicacion: {
-                type: "string",
-                description: "Location. Example: 'Albrook, Panama City'"
-            },
-            area: {
-                type: "string",
-                description: "CRITICAL: Property area. ALWAYS extract. Examples: '120 m²', '95 m² construcción'. MANDATORY field."
-            },
-            detalles: {
-                type: "array",
-                description: "Property details. Examples: '3 recámaras', '2.5 baños', '2 parqueos'. DO NOT include area.",
-                items: { type: "string" }
-            },
-            amenidades: {
-                type: "array",
-                description: "Amenities. Examples: 'Piscina', 'Parqueo', 'Área verde'",
-                items: { type: "string" }
-            },
-            descripcion: {
-                type: "string",
-                description: "Property description without contact info"
-            }
-        },
-        required: ["titulo", "precio", "area"]
-    },
-    'mlsacobir.com': {
-        type: "object",
-        properties: {
-            titulo: {
-                type: "string",
-                description: "MLS listing title. Example: 'Modern Apartment in Coco del Mar'"
-            },
-            precio: {
-                type: "string",
-                description: "Listing price. Example: '$295,000', 'B/. 250,000'"
-            },
-            ubicacion: {
-                type: "string",
-                description: "Property location. Example: 'Coco del Mar, Panama City'"
-            },
-            area: {
-                type: "string",
-                description: "CRITICAL: Property area/size. ALWAYS extract this from MLS data. Examples: '110 m²', '1,184 sq ft', '85 m² + 15 m² balcony'. MANDATORY."
-            },
-            descripcion: {
-                type: "string",
-                description: "MLS listing description. Extract the complete property description without agent contact details."
-            },
-            caracteristicas: {
-                type: "array",
-                description: "MLS property characteristics. Examples: '3 bedrooms', '2 bathrooms', '1 parking space', 'Floor 8'. DO NOT include area here.",
-                items: { type: "string" }
-            },
-            amenidades: {
-                type: "array",
-                description: "Building and property amenities. Examples: 'Swimming pool', 'Gym', '24/7 security', 'Social area', 'Elevator'",
-                items: { type: "string" }
-            }
-        },
-        required: ["titulo", "precio", "ubicacion", "area", "descripcion"]
-    }
-};
-
-// Get extraction schema based on URL
-function getSchemaForUrl(url: string): any | null {
-    try {
-        const hostname = new URL(url).hostname.replace('www.', '');
-        for (const [domain, schema] of Object.entries(EXTRACTION_SCHEMAS)) {
-            if (hostname.includes(domain)) {
-                return schema;
-            }
-        }
+        return { ...data, ...translated };
     } catch (e) {
-        console.error("Error parsing URL:", e);
+        return data;
     }
-    return null;
 }
 
-// Map structured data from FireCrawl to PropertyData format
-function mapStructuredDataToPropertyData(data: any, url: string, debugLog: string[]): PropertyData | null {
-    logDebug(debugLog, "Mapping structured data to PropertyData...");
-
-    // Accept both 'titulo' (Spanish) and 'title' (English)
-    const title = data?.titulo || data?.title;
-    const price = data?.precio || data?.price;
-
-    logDebug(debugLog, `Found title: ${title ? 'Yes' : 'No'} ("${title?.substring(0, 30)}...")`);
-    logDebug(debugLog, `Found price: ${price ? 'Yes' : 'No'} ("${price}")`);
-
-    // If we don't have at least title or price, return null
-    if (!title && !price) {
-        logDebug(debugLog, "No title or price found in structured data, returning null");
-        return null;
-    }
-
-    // ANTI-BOT / INTERSTITIAL CHECK
-    if (title && (title.includes("Download our App") || title.includes("Pardon Our Interruption") || title.includes("Access Denied"))) {
-        logDebug(debugLog, "Detected anti-bot/interstitial page title. Treating as failed extraction.");
-        return null; // Force fallback
-    }
-
-    let hostname = "unknown";
-    try {
-        hostname = new URL(url).hostname.replace('www.', '');
-    } catch (e) {
-        console.error("Error parsing URL in mapStructuredDataToPropertyData:", e);
-    }
-
-    // Extract bedrooms, bathrooms, area from detalles/caracteristicas
-    let bedrooms: string | undefined;
-    let bathrooms: string | undefined;
-    let area: string | undefined;
-
-    // PRIORITY 1: Check if area is directly provided
-    area = data.area || data.superficie || data.size;
-    if (area) logDebug(debugLog, `Found area directly: ${area}`);
-
-    const allDetails = [
-        ...(data.detalles || []),
-        ...(data.caracteristicas || []),
-        ...(data.features || [])
-    ];
-
-    logDebug(debugLog, `Processing ${allDetails.length} details items for regex extraction`);
-
-    for (const detail of allDetails) {
-        if (!detail || typeof detail !== 'string') continue;
-        const detailLower = detail.toLowerCase();
-
-        // Bedrooms
-        if (!bedrooms && /\d+\s*(hab|rec[aá]mara|bedroom|cuarto|dormitorio)/i.test(detail)) {
-            bedrooms = detail;
-            logDebug(debugLog, `Extracted bedrooms from detail: "${detail}"`);
-        }
-
-        // Bathrooms
-        if (!bathrooms && /\d+(\.\d+)?\s*(ba[ñn]o|bathroom)/i.test(detail)) {
-            bathrooms = detail;
-            logDebug(debugLog, `Extracted bathrooms from detail: "${detail}"`);
-        }
-
-        // Area - IMPROVED REGEX
-        if (!area && /\d+[,\d]*\s*(m[2²]|sq\.?\s*ft|metro|square|área)/i.test(detail)) {
-            area = detail;
-            logDebug(debugLog, `Extracted area from detail: "${detail}"`);
-        }
-    }
-
-    // FALLBACK: If area still not found, try to extract from description
-    if (!area) {
-        const desc = data.descripcion || data.description || '';
-        const areaMatch = desc.match(/(\d+[,\d]*)\s*(m[2²]|sq\.?\s*ft|metros?\s*cuadrados?)/i);
-        if (areaMatch) {
-            area = areaMatch[0];
-            logDebug(debugLog, `Extracted area from description fallback: "${area}"`);
-        } else {
-            logDebug(debugLog, "Could not extract area from description");
-        }
-    }
-
-    // Combine all amenities/features
-    const allFeatures = [
-        ...(data.amenidades || []),
-        ...(data.amenities || []),
-        ...(data.caracteristicas || []),
-        ...(data.features || [])
-    ].filter((f: any) => f && typeof f === 'string');
-
-    // Get description - prefer longer descriptions
-    let description = data.descripcion || data.description || title || "Luxury property in Panama";
-    logDebug(debugLog, `Initial description length: ${description.length}`);
-
-    // If description is too short, try to combine with other text
-    if (description.length < 100 && data.detalles && Array.isArray(data.detalles)) {
-        const detailsText = data.detalles.join('. ');
-        if (detailsText.length > description.length) {
-            description = detailsText;
-            logDebug(debugLog, `Replaced short description with details text (${description.length} chars)`);
-        }
-    }
-
-    console.log("Mapped data:", {
-        title: title ? "✓" : "✗",
-        price: price ? "✓" : "✗",
-        area: area ? "✓" : "✗",
-        bedrooms: bedrooms ? "✓" : "✗",
-        bathrooms: bathrooms ? "✗" : "✗",
-        description: description.length + " chars",
-        features: allFeatures.length + " items"
-    });
-    logDebug(debugLog, "Mapped data successfully");
-
-    return {
-        title: cleanText(title || "Property Listing"),
-        price: cleanText(price || "Contact for Price"),
-        location: cleanText(data.ubicacion || data.location || "Panama"),
-        bedrooms,
-        bathrooms,
-        area,
-        description: cleanText(description),
-        features: allFeatures.map((f: string) => cleanText(f)),
-        images: [], // Images will be extracted separately
-        source: hostname
-    };
-}
-
-// Extract property images with site-specific selectors
-function extractPropertyImages($: ReturnType<typeof cheerio.load>, url: string): string[] {
-    const images: string[] = [];
-    const seenImages = new Set<string>();
-
-    const hostname = new URL(url).hostname.replace('www.', '');
-
-    // 1. Always try OG Image first (usually the main property image)
-    const ogImg = $('meta[property="og:image"]').attr('content');
-    if (ogImg && !seenImages.has(ogImg)) {
-        images.push(ogImg);
-        seenImages.add(ogImg);
-    }
-
-    // 2. Site-specific gallery selectors
-    let gallerySelectors: string[] = [];
-
-    if (hostname.includes('encuentra24.com')) {
-        gallerySelectors = [
-            '.gallery-image img',
-            '.carousel-item img',
-            '.property-gallery img',
-            '.photo-gallery img',
-            '[class*="gallery"] img',
-            '[class*="slider"] img',
-            '[id*="gallery"] img'
-        ];
-    } else if (hostname.includes('jamesedition.com')) {
-        gallerySelectors = [
-            '.gallery img',
-            '.image-gallery img',
-            '[class*="Gallery"] img',
-            '[class*="carousel"] img',
-            '.listing-images img'
-        ];
-    } else if (hostname.includes('compreoalquile.com')) {
-        gallerySelectors = [
-            '.gallery img',
-            '.property-images img',
-            '[class*="gallery"] img',
-            '[class*="slider"] img'
-        ];
-    } else if (hostname.includes('mlsacobir.com')) {
-        gallerySelectors = [
-            '.property-gallery img',
-            '.listing-gallery img',
-            '[class*="gallery"] img',
-            '[class*="photo"] img'
-        ];
-    } else {
-        // Generic gallery selectors for unknown sites
-        gallerySelectors = [
-            '[class*="gallery"] img',
-            '[class*="Gallery"] img',
-            '[id*="gallery"] img',
-            '[class*="slider"] img',
-            '[class*="carousel"] img',
-            '[class*="photo"] img',
-            'main img',
-            '.content img',
-            '#content img'
-        ];
-    }
-
-    // Try each selector in order
-    for (const selector of gallerySelectors) {
-        $(selector).each((_, el) => {
-            const src = $(el).attr('src') ||
-                $(el).attr('data-src') ||
-                $(el).attr('data-original') ||
-                $(el).attr('data-lazy') ||
-                $(el).attr('data-image');
-
-            if (src && isValidPropertyImage(src) && !seenImages.has(src)) {
-                images.push(src);
-                seenImages.add(src);
-            }
-        });
-
-        // If we found good images, stop searching
-        if (images.length >= 5) break;
-    }
-
-    // 3. Fallback: If still no images, try all images but with strict filtering
-    if (images.length < 3) {
-        $('img').each((_, el) => {
-            const src = $(el).attr('src') || $(el).attr('data-src');
-            if (src && isValidPropertyImage(src) && !seenImages.has(src)) {
-                // Additional size check - property images are usually larger
-                const width = parseInt($(el).attr('width') || '0');
-                const height = parseInt($(el).attr('height') || '0');
-
-                // Skip small images (likely icons/logos)
-                if (width > 200 || height > 200 || (!width && !height)) {
-                    images.push(src);
-                    seenImages.add(src);
-                }
-            }
-        });
-    }
-
-    return images.slice(0, 15); // Return up to 15 images
-}
-
-// Validate if an image URL is likely a property image
-function isValidPropertyImage(src: string): boolean {
-    if (!src) return false;
-
-    // Must be a full URL
-    if (!src.startsWith('http')) return false;
-
-    // Exclude common non-property images
-    const excludePatterns = [
-        'logo', 'icon', 'avatar', 'badge', 'button',
-        'banner', 'ad', 'advertisement', 'sponsor',
-        'facebook', 'twitter', 'instagram', 'whatsapp',
-        'pixel', 'tracking', 'analytics',
-        '1x1', 'spacer', 'blank',
-        'favicon', 'sprite'
-    ];
-
-    const srcLower = src.toLowerCase();
-    for (const pattern of excludePatterns) {
-        if (srcLower.includes(pattern)) return false;
-    }
-
-    // Must be an image file
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
-    const hasImageExtension = imageExtensions.some(ext => srcLower.includes(ext));
-
-    // Allow if has image extension OR is from a CDN (CDNs often don't show extensions)
-    const isCDN = srcLower.includes('cloudinary') ||
-        srcLower.includes('imgix') ||
-        srcLower.includes('cloudfront') ||
-        srcLower.includes('akamai');
-    return hasImageExtension || isCDN;
-}
-
+// Main Handler
 export const handler: Handler = async (event: HandlerEvent) => {
-    // Request-scoped debug log
     const debugLogArray: string[] = [];
-    logDebug(debugLogArray, "Starting scrape request");
+    logDebug(debugLogArray, "Starting scrape request (SDK Version)");
 
     const headers = {
         "Access-Control-Allow-Origin": "*",
@@ -706,251 +168,171 @@ export const handler: Handler = async (event: HandlerEvent) => {
         "Access-Control-Allow-Methods": "POST, OPTIONS",
     };
 
-    if (event.httpMethod === "OPTIONS") {
-        return { statusCode: 200, headers, body: "" };
-    }
-
-    if (event.httpMethod !== "POST") {
-        return {
-            statusCode: 405,
-            headers,
-            body: JSON.stringify({ error: "Method not allowed" }),
-        };
-    }
+    if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers, body: "" };
+    if (event.httpMethod !== "POST") return { statusCode: 405, headers, body: JSON.stringify({ error: "Method not allowed" }) };
 
     try {
         const { url } = JSON.parse(event.body || "{}");
-        logDebug(debugLogArray, `Target URL: ${url}`);
-
-        if (!url) {
-            return {
-                statusCode: 400,
-                headers,
-                body: JSON.stringify({ error: "URL is required" }),
-            };
-        }
-
-        // Use FireCrawl API for robust scraping
-        const FIRECRAWL_API_KEY = "fc-c3b388c7f1e14ef8a3fa5e3334b71add"; // Provided by user
-
-        console.log("Scraping with FireCrawl:", url);
-
-        // Check if we have a structured extraction schema for this URL
-        const extractionSchema = getSchemaForUrl(url);
+        if (!url) throw new Error("URL is required");
 
         let propertyData: PropertyData = {
-            title: '',
-            price: '',
-            location: '',
-            description: '',
-            features: [],
-            images: [],
-            bedrooms: '',
-            bathrooms: '',
-            area: '',
-            source: 'Encuentra24'
+            title: '', price: '', location: '', description: '', features: [],
+            images: [], bedrooms: '', bathrooms: '', area: '', source: 'Unknown'
         };
 
-        if (extractionSchema) {
-            // USE STRUCTURED EXTRACTION for supported sites
-            console.log("Using structured extraction with schema");
-            logDebug(debugLogArray, `Using structured schema for domain: ${new URL(url).hostname}`);
+        const app = new FirecrawlApp({ apiKey: FIRECRAWL_API_KEY });
+        const hostname = new URL(url).hostname;
 
-            let fcData: any = null;
+        logDebug(debugLogArray, `Identifying schema for ${hostname}`);
 
-            try {
-                // PRIMARY ATTEMPT: Structured Extraction
-                let fcResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${FIRECRAWL_API_KEY}`
-                    },
-                    body: JSON.stringify({
-                        url: url,
-                        extractorOptions: {
-                            extractionSchema: extractionSchema,
-                            mode: "llm-extraction"
-                        },
-                        pageOptions: {
-                            onlyMainContent: true,
-                            includeHtml: true
-                        }
-                    })
+        try {
+            let extractionResult: any;
+
+            if (hostname.includes("encuentra24.com")) {
+                const result = await app.agent({
+                    prompt: "Extraer datos de la propiedad en la URL proporcionada, incluyendo descripción, amenidades, metraje, precio, cantidad de recámaras o detalles técnicos relevantes. Excluir números de contacto.",
+                    schema: Encunetra24Schema,
+                    urls: [url],
+                    model: 'spark-1-mini',
                 });
 
-                if (!fcResponse.ok) {
-                    logDebug(debugLogArray, `FireCrawl Structured Extraction failed with status ${fcResponse.status}`);
-                    console.log("Retrying with authentication-only scrape (no schema)...");
-                    logDebug(debugLogArray, "Retrying with basic HTML scrape...");
-
-                    // RETRY ATTEMPT: Basic Scrape
-                    const retryResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "Authorization": `Bearer ${FIRECRAWL_API_KEY}`
-                        },
-                        body: JSON.stringify({
-                            url: url,
-                            pageOptions: {
-                                onlyMainContent: false, // Get full HTML
-                                includeHtml: true
-                            }
-                        })
-                    });
-
-                    if (!retryResponse.ok) {
-                        throw new Error(`FireCrawl API failed: ${fcResponse.status} (Retry: ${retryResponse.status})`);
-                    }
-
-                    const retryData = await retryResponse.json();
-                    if (retryData.success && retryData.data && retryData.data.html) {
-                        logDebug(debugLogArray, "Retry successful, proceeding with HTML extraction");
-                        fcData = retryData;
-                    } else {
-                        throw new Error("Retry response invalid");
-                    }
-                } else {
-                    fcData = await fcResponse.json();
-                    if (!fcData.success || !fcData.data) {
-                        throw new Error("FireCrawl returned unsuccessful response");
-                    }
-                    logDebug(debugLogArray, "FireCrawl response received successfully");
+                if (result.success && result.data) {
+                    const data = result.data as z.infer<typeof Encunetra24Schema>;
+                    propertyData = {
+                        title: data.encuentra24_title || "Encuentra24 Property",
+                        price: data.encuentra24_price || "Contact for Price",
+                        location: data.encuentra24_location || "Panama",
+                        description: data.encuentra24_description,
+                        features: data.encuentra24_amenities?.map(a => a.value) || [],
+                        bedrooms: data.encuentra24_bedrooms || "",
+                        bathrooms: data.encuentra24_bathrooms || "",
+                        area: data.encuentra24_square_footage || "",
+                        images: [],
+                        source: "Encuentra24"
+                    };
                 }
-
-            } catch (fireCrawlError) {
-                console.error("FireCrawl failed, attempting direct fetch fallback:", fireCrawlError);
-                logDebug(debugLogArray, `FireCrawl failed (${fireCrawlError}). Attempting direct fetch fallback...`);
-
-                // FINAL FALLBACK: Direct Fetch
-                try {
-                    const directResponse = await fetch(url, {
-                        headers: {
-                            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                            'Accept-Language': 'es-419,es;q=0.9,en;q=0.8'
-                        }
-                    });
-
-                    if (directResponse.ok) {
-                        const html = await directResponse.text();
-                        logDebug(debugLogArray, "Direct fetch successful. Using extracted HTML.");
-                        // Mock structure
-                        fcData = {
-                            success: true,
-                            data: {
-                                html: html,
-                                extraction: {},
-                                markdown: ""
-                            }
-                        };
-                    } else {
-                        logDebug(debugLogArray, `Direct fetch failed: ${directResponse.status}`);
-                        throw fireCrawlError; // Throw original error
-                    }
-                } catch (directError) {
-                    logDebug(debugLogArray, `Direct fetch error: ${directError}`);
-                    throw fireCrawlError; // Throw original error
+            } else if (hostname.includes("jamesedition.com")) {
+                const result = await app.agent({
+                    prompt: "Extraer datos de la propiedad desde la URL de JamesEdition.",
+                    schema: JamesEditionSchema,
+                    urls: [url],
+                    model: 'spark-1-mini',
+                });
+                if (result.success && result.data) {
+                    const data = result.data as z.infer<typeof JamesEditionSchema>;
+                    propertyData = {
+                        title: data.jamesedition_title || "JamesEdition Property",
+                        price: data.jamesedition_price_usd ? `$${data.jamesedition_price_usd}` : "Contact for Price",
+                        location: data.jamesedition_location || "Panama",
+                        description: data.jamesedition_description,
+                        features: data.jamesedition_amenities?.map(a => a.value) || [],
+                        bedrooms: data.jamesedition_bedrooms?.toString() || "",
+                        bathrooms: data.jamesedition_bathrooms?.toString() || "",
+                        area: data.jamesedition_square_footage?.toString() || "",
+                        images: [],
+                        source: "JamesEdition"
+                    };
                 }
+            } else if (hostname.includes("compreoalquile.com")) {
+                const result = await app.agent({
+                    prompt: "Extraer datos técnicos de la propiedad en Compreoalquile.",
+                    schema: CompreoalquileSchema,
+                    urls: [url],
+                    model: 'spark-1-mini',
+                });
+                if (result.success && result.data) {
+                    const data = result.data as z.infer<typeof CompreoalquileSchema>;
+                    propertyData = {
+                        title: data.title || "Compreoalquile Property",
+                        price: data.price ? `$${data.price}` : "Contact for Price",
+                        location: data.location || "Panama",
+                        description: data.description,
+                        features: data.amenities?.map(a => a.value) || [],
+                        bedrooms: data.bedrooms?.toString() || "",
+                        bathrooms: data.bathrooms?.toString() || "",
+                        area: data.square_footage?.toString() || "",
+                        images: [],
+                        source: "Compreoalquile"
+                    };
+                }
+            } else if (hostname.includes("mlsacobir.com")) {
+                const result = await app.agent({
+                    prompt: "Extraer datos de la propiedad desde MLS Acobir.",
+                    schema: MLSAcobirSchema,
+                    urls: [url],
+                    model: 'spark-1-mini',
+                });
+                if (result.success && result.data) {
+                    const data = result.data as z.infer<typeof MLSAcobirSchema>;
+                    propertyData = {
+                        title: data.title || "MLS Acobir Property",
+                        price: data.price ? `$${data.price}` : "Contact for Price",
+                        location: data.location || "Panama",
+                        description: data.description,
+                        features: data.amenities?.map(a => a.value) || [],
+                        bedrooms: data.bedrooms?.toString() || "",
+                        bathrooms: data.bathrooms?.toString() || "",
+                        area: data.square_footage?.toString() || "",
+                        images: [],
+                        source: "MLS Acobir"
+                    };
+                }
+            } else {
+                throw new Error("Unsupported domain for agent extraction");
             }
 
-            // PROCESSING DATA
-            if (fcData && fcData.data) {
-                // Map structured data to PropertyData
-                const structuredData = fcData.data.llm_extraction || fcData.data.extract || fcData.data.extraction || fcData.data;
+            logDebug(debugLogArray, "Agent extraction successful");
 
-                logDebug(debugLogArray, `Structured data keys found: ${Object.keys(structuredData || {}).join(', ')}`);
-                const mappedData = mapStructuredDataToPropertyData(structuredData, url, debugLogArray);
-
-                if (!mappedData) {
-                    logDebug(debugLogArray, "Mapping structured data failed (or rejected), falling back to HTML");
-                    if (fcData.data.html) {
-                        const $ = cheerio.load(fcData.data.html);
-                        propertyData = extractWithMultipleStrategies($, url, fcData.data.html, debugLogArray);
-                        logDebug(debugLogArray, "Fallback HTML extraction completed");
-                    } else {
-                        throw new Error("No HTML available for fallback");
+            // Extract Images via fallback scrape (Agent doesn't return images reliably)
+            // Or we could have added images to schema, but usually Firecrawl scrape is better for HTML
+            const scrapeResult = await app.scrapeUrl(url, { formats: ['html'] });
+            if (scrapeResult.success && scrapeResult.html) {
+                const $ = cheerio.load(scrapeResult.html);
+                // Reuse image extraction logic (simplification of previous function)
+                const imgs: string[] = [];
+                $('img').each((i, el) => {
+                    const src = $(el).attr('src');
+                    if (src && src.startsWith('http') && !src.includes('logo') && !src.includes('icon')) {
+                        imgs.push(src);
                     }
-                } else {
-                    propertyData = mappedData;
-                    // Description fallback check...
-                    if ((!propertyData.description || propertyData.description.length < 50) && fcData.data.markdown) {
-                        let cleanMarkdown = fcData.data.markdown.replace(/!\[.*?\]\(.*?\)/g, "").replace(/\[([^\]]+)\]\(.*?\)/g, "$1").replace(/<[^>]*>/g, "").trim();
-                        if (cleanMarkdown.length > 50) propertyData.description = cleanMarkdown.substring(0, 2000);
-                    }
-                    if (fcData.data.html) {
-                        const $ = cheerio.load(fcData.data.html);
-                        const imgs = extractPropertyImages($, url);
-                        if (imgs.length > 0) propertyData.images = [...new Set([...propertyData.images, ...imgs])];
-                    }
-                }
+                });
+                // Filter top 10 unique
+                propertyData.images = [...new Set(imgs)].slice(0, 15);
             }
-        } else {
-            // FALLBACK: Use HTML scraping for unsupported sites
-            console.log("Using HTML scraping (no schema available)");
-            logDebug(debugLogArray, "No schema found for this domain, using generic HTML scraping");
 
-            const fcResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
-                method: "POST",
+        } catch (sdkError) {
+            logDebug(debugLogArray, `SDK/Agent failed: ${sdkError}. Falling back to Direct Fetch.`);
+
+            // FINAL FALLBACK: Direct Fetch
+            const directResponse = await fetch(url, {
                 headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${FIRECRAWL_API_KEY}`
-                },
-                body: JSON.stringify({
-                    url: url,
-                    pageOptions: {
-                        onlyMainContent: false,
-                        includeHtml: true,
-                        screenshot: false
-                    }
-                })
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+                }
             });
 
-            if (!fcResponse.ok) {
-                logDebug(debugLogArray, `FireCrawl API failed with status ${fcResponse.status}`);
-                throw new Error(`FireCrawl API failed: ${fcResponse.status} ${fcResponse.statusText}`);
-            }
+            if (directResponse.ok) {
+                const html = await directResponse.text();
+                const $ = cheerio.load(html);
 
-            const fcData = await fcResponse.json();
+                // Generic Extraction
+                propertyData.title = $('h1').first().text().trim() || $('title').text().trim();
+                propertyData.description = $('meta[name="description"]').attr('content') || "";
 
-            if (!fcData.success || !fcData.data) {
-                logDebug(debugLogArray, "FireCrawl response indicated failure");
-                throw new Error("FireCrawl returned unsuccessful response");
-            }
+                // Try to find price
+                const priceMatch = html.match(/\$[\d,]+\.?\d*/);
+                if (priceMatch) propertyData.price = priceMatch[0];
 
-            const html = fcData.data.html || fcData.data.content;
-            logDebug(debugLogArray, `Received HTML of length ${html?.length || 0}`);
-
-            const $ = cheerio.load(html);
-
-            // ULTRA AGGRESSIVE MULTI-STRATEGY EXTRACTION
-            propertyData = extractWithMultipleStrategies($, url, html, debugLogArray);
-
-            // EXTRA CLEANING: If FireCrawl provided markdown, use it to pick a cleaner description
-            if (fcData.data.markdown && (!propertyData.description || propertyData.description.length < 100)) {
-                logDebug(debugLogArray, "Using markdown for description in generic scraping");
-                propertyData.description = fcData.data.markdown.substring(0, 1500);
+                logDebug(debugLogArray, "Direct fetch fallback successful");
+            } else {
+                throw new Error("All extraction methods failed");
             }
         }
 
-        // STEP 1: Remove private information (company names, agent info, phone numbers, emails)
-        console.log("Removing private information...");
-        logDebug(debugLogArray, "Removing private information...");
+        // Cleanup
         propertyData.title = removePrivateInfo(propertyData.title);
         propertyData.description = removePrivateInfo(propertyData.description);
-        propertyData.location = removePrivateInfo(propertyData.location);
-        propertyData.features = propertyData.features.map(f => removePrivateInfo(f)).filter(f => f.length > 0);
-        if (propertyData.bedrooms) propertyData.bedrooms = removePrivateInfo(propertyData.bedrooms);
-        if (propertyData.bathrooms) propertyData.bathrooms = removePrivateInfo(propertyData.bathrooms);
-        if (propertyData.area) propertyData.area = removePrivateInfo(propertyData.area);
-
-        // STEP 2: Translate to English
-        logDebug(debugLogArray, "Starting translation...");
         propertyData = await translateToEnglish(propertyData);
-        logDebug(debugLogArray, "Translation finished");
-
-        // Attach debug log to response
         propertyData.debugLog = debugLogArray;
 
         return {
@@ -958,9 +340,9 @@ export const handler: Handler = async (event: HandlerEvent) => {
             headers,
             body: JSON.stringify(propertyData),
         };
+
     } catch (error) {
-        logDebug(debugLogArray, `Error occurred: ${error instanceof Error ? error.message : String(error)}`);
-        console.error("Scraping error:", error);
+        console.error("Handler error:", error);
         return {
             statusCode: 500,
             headers,
@@ -971,84 +353,6 @@ export const handler: Handler = async (event: HandlerEvent) => {
             }),
         };
     }
-};
-
-// STRATEGY 1: CSS Selectors
-function trySelectors($: ReturnType<typeof cheerio.load>, selectors: string[], attr?: string): string {
-    for (const sel of selectors) {
-        try {
-            if (attr) {
-                const val = $(sel).attr(attr);
-                if (val && val.trim().length > 0) return cleanText(val);
-            } else {
-                const val = $(sel).first().text();
-                if (val && val.trim().length > 0) return cleanText(val);
-            }
-        } catch (e) { /* continue */ }
-    }
-    return "";
-}
-
-// STRATEGY 2: Regex Patterns
-function tryRegex(html: string, patterns: RegExp[], validator?: (match: string) => boolean): string {
-    for (const pattern of patterns) {
-        try {
-            const matches = html.match(pattern);
-            if (matches) {
-                for (const match of matches) {
-                    if (!validator || validator(match)) {
-                        return match.trim();
-                    }
-                }
-            }
-        } catch (e) { /* continue */ }
-    }
-    return "";
-}
-
-// STRATEGY 3: JSON-LD Schema
-function tryJSONLD($: ReturnType<typeof cheerio.load>, property: string): string {
-    try {
-        $('script[type="application/ld+json"]').each((_, el) => {
-            try {
-                const json = JSON.parse($(el).html() || "{}");
-                if (json[property]) return json[property];
-                if (json["@graph"]) {
-                    for (const item of json["@graph"]) {
-                        if (item[property]) return item[property];
-                    }
-                }
-            } catch (e) { /* continue */ }
-        });
-    } catch (e) { /* continue */ }
-    return "";
-}
-
-// STRATEGY 4: Meta Tags
-function tryMetaTags($: ReturnType<typeof cheerio.load>, properties: string[]): string {
-    for (const prop of properties) {
-        try {
-            let val = $(`meta[property="${prop}"]`).attr("content");
-            if (val) return cleanText(val);
-            val = $(`meta[name="${prop}"]`).attr("content");
-            if (val) return cleanText(val);
-        } catch (e) { /* continue */ }
-    }
-    return "";
-}
-
-// STRATEGY 5: Text Content Analysis
-function findInText($: ReturnType<typeof cheerio.load>, keywords: string[], minLength = 3): string {
-    const allText = cleanText($("body").text());
-    for (const keyword of keywords) {
-        const regex = new RegExp(`${keyword}[:\\s]*([^\\n<>]{${minLength},100})`, "i");
-        const match = allText.match(regex);
-        if (match && match[1]) return cleanText(match[1]);
-    }
-    return "";
-}
-
-function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: string, html: string, debugLog: string[]): PropertyData {
     logDebug(debugLog, "Starting multi-strategy extraction");
 
     // ========== SPECIFIC STRATEGY: ENCUENTRA24 ==========
