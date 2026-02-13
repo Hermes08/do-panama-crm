@@ -765,7 +765,52 @@ export const handler: Handler = async (event: HandlerEvent) => {
             });
 
             if (!fcResponse.ok) {
-                logDebug(debugLogArray, `FireCrawl API failed with status ${fcResponse.status}`);
+                logDebug(debugLogArray, `FireCrawl Structured Extraction failed with status ${fcResponse.status}`);
+
+                // RETRY LOGIC: If structured extraction fails (500 or other), try basic scrape to get HTML
+                // This is critical for Encuentra24 which might block the "smart" extraction but allow basic access
+                console.log("Retrying with authentication-only scrape (no schema)...");
+                logDebug(debugLogArray, "Retrying with basic HTML scrape...");
+
+                const retryResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${FIRECRAWL_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        url: url,
+                        pageOptions: {
+                            onlyMainContent: false, // Get full HTML
+                            includeHtml: true
+                        }
+                    })
+                });
+
+                if (!retryResponse.ok) {
+                    logDebug(debugLogArray, `Retry failed with status ${retryResponse.status}`);
+                    throw new Error(`FireCrawl API failed: ${fcResponse.status} (Retry: ${retryResponse.status})`);
+                }
+
+                // If retry succeeds, use this data for fallback HTML extraction
+                const retryData = await retryResponse.json();
+                if (retryData.success && retryData.data && retryData.data.html) {
+                    logDebug(debugLogArray, "Retry successful, proceeding with HTML extraction");
+                    // Mock a "failed" structured data response so the flow falls through to HTML processing
+                    const $ = cheerio.load(retryData.data.html);
+                    propertyData = extractWithMultipleStrategies($, url, retryData.data.html, debugLogArray);
+
+                    // Add standard fields to match expected flow
+                    propertyData = await translateToEnglish(propertyData);
+                    propertyData.debugLog = debugLogArray;
+
+                    return {
+                        statusCode: 200,
+                        headers,
+                        body: JSON.stringify(propertyData),
+                    };
+                }
+
                 throw new Error(`FireCrawl API failed: ${fcResponse.status} ${fcResponse.statusText}`);
             }
 
