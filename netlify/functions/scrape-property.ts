@@ -1174,33 +1174,100 @@ function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: 
 }
 
 function extractEncuentra24($: ReturnType<typeof cheerio.load>, html: string): Partial<PropertyData> {
-    const title = cleanText($("h1").first().text());
-    const price = cleanText($(".price, [class*='price']").first().text() ||
-        $("div:contains('Precio')").next().text());
+    // 1. TITLE
+    // Try standard selector first, then fallback to meta tags
+    let title = cleanText($("h1").first().text());
+    if (!title) {
+        title = $('meta[property="og:title"]').attr('content') || '';
+        // Clean up common suffixes
+        title = title.replace('| Encuentra24.com', '').trim();
+    }
 
-    const location = cleanText($(".location, [class*='address']").first().text() ||
-        $("div:contains('Ubicación')").next().text());
+    // 2. PRICE
+    // Look for price in specific containers or by currency regex
+    let price = cleanText($(".price, [class*='price']").first().text());
+    if (!price) {
+        // Fallback: finding price by text proximity
+        const priceElement = $("div:contains('Precio'), span:contains('Precio')").next();
+        if (priceElement.length) price = cleanText(priceElement.text());
 
-    // Specific to Encuentra24 structure
-    const bedrooms = cleanText($(".info-details .bedrooms, .info-details:contains('Recámaras') .value").text());
-    const bathrooms = cleanText($(".info-details .bathrooms, .info-details:contains('Baños') .value").text());
-    const area = cleanText($(".info-details .area, .info-details:contains('m²') .value").text());
+        // Regex fallback
+        if (!price) {
+            const priceMatch = html.match(/\$[\d,]+(?:\.\d{2})?/);
+            if (priceMatch) price = priceMatch[0];
+        }
+    }
 
-    const description = cleanText($(".description-container, .description").text());
+    // 3. LOCATION
+    let location = cleanText($(".location, [class*='address']").first().text());
+    if (!location) {
+        // Try breadcrumbs often found in E24
+        const breadcrumbs = $(".breadcrumb, .breadcrumbs").text();
+        if (breadcrumbs) location = cleanText(breadcrumbs.split('>').slice(-2).join(', '));
 
-    // Features in Encuentra24 are often in a specific list
+        // Fallback to text proximity
+        if (!location) {
+            const locElement = $("div:contains('Ubicación'), span:contains('Ubicación')").next();
+            if (locElement.length) location = cleanText(locElement.text());
+        }
+    }
+
+    // 4. DETAILS (Bedrooms, Bathrooms, Area)
+    // Encuentra24 uses .info-details usually, but sometimes simple labeled lists
+    let bedrooms = cleanText($(".info-details .bedrooms, .info-details:contains('Recámaras') .value").text());
+    if (!bedrooms) {
+        const bedMatch = html.match(/(\d+)\s*(?:Rec?maras|Recs?|Bedrooms?)/i);
+        if (bedMatch) bedrooms = bedMatch[1];
+    }
+
+    let bathrooms = cleanText($(".info-details .bathrooms, .info-details:contains('Baños') .value").text());
+    if (!bathrooms) {
+        const bathMatch = html.match(/(\d+(?:\.\d+)?)\s*(?:Ba?os|Baths?)/i);
+        if (bathMatch) bathrooms = bathMatch[1];
+    }
+
+    let area = cleanText($(".info-details .area, .info-details:contains('m²') .value").text());
+    if (!area) {
+        const areaMatch = html.match(/(\d+(?:,\d+)?)\s*(?:m2|m²|mt2)/i);
+        if (areaMatch) area = areaMatch[0];
+    }
+
+    // 5. DESCRIPTION
+    // Expand selectors for description
+    let description = cleanText($(".description-container, .description, #description, [itemprop='description']").text());
+    if (!description || description.length < 50) {
+        // Try getting text from generic content containers if specific classes fail
+        // Often E24 puts description in a simple div under a header
+        description = cleanText($("h2:contains('Detalles')").next('div, p').text());
+    }
+
+    // 6. FEATURES
     const features: string[] = [];
-    $(".amenities li, .features li").each((_, el) => {
+    $(".amenities li, .features li, ul.check-list li").each((_, el) => {
         const feature = cleanText($(el).text());
         if (feature) features.push(feature);
     });
 
-    // Images in carousel
+    // 7. IMAGES
     const images: string[] = [];
-    $(".gallery-image, .carousel-item img").each((_, el) => {
-        const src = $(el).attr("data-src") || $(el).attr("src");
-        if (src && src.startsWith("http")) images.push(src);
+    // Try all likely image containers
+    $(".gallery-image, .carousel-item img, .gallery-container img, .photo").each((_, el) => {
+        const src = $(el).attr("data-src") || $(el).attr("src") || $(el).attr("data-lazy-src");
+        if (src && src.startsWith("http") && !src.includes("background") && !src.includes("user")) {
+            images.push(src);
+        }
     });
+
+    // Fallback: Extract from script tag if images are loaded via JS (common in E24)
+    if (images.length === 0) {
+        const scriptContent = $("script:contains('gallery')").text();
+        const imgMatches = scriptContent.match(/https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)/gi);
+        if (imgMatches) {
+            imgMatches.forEach(img => {
+                if (!images.includes(img) && !img.includes('thumb')) images.push(img);
+            });
+        }
+    }
 
     return {
         title,
@@ -1211,7 +1278,7 @@ function extractEncuentra24($: ReturnType<typeof cheerio.load>, html: string): P
         area,
         description,
         features,
-        images
+        images: [...new Set(images)] // De-duplicate
     };
 }
 
