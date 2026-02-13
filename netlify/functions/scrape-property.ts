@@ -444,12 +444,17 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
     let bathrooms: string | undefined;
     let area: string | undefined;
 
+    // PRIORITY 1: Check if area is directly provided
+    area = data.area || data.superficie || data.size;
+
     const allDetails = [
         ...(data.detalles || []),
-        ...(data.caracteristicas || [])
+        ...(data.caracteristicas || []),
+        ...(data.features || [])
     ];
 
     for (const detail of allDetails) {
+        if (!detail || typeof detail !== 'string') continue;
         const detailLower = detail.toLowerCase();
 
         // Bedrooms
@@ -462,11 +467,50 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
             bathrooms = detail;
         }
 
-        // Area
-        if (!area && /\d+[,\d]*\s*(m[2²]|sq\.?\s*ft|metro)/i.test(detail)) {
+        // Area - IMPROVED REGEX
+        if (!area && /\d+[,\d]*\s*(m[2²]|sq\.?\s*ft|metro|square|área)/i.test(detail)) {
             area = detail;
         }
     }
+
+    // FALLBACK: If area still not found, try to extract from description
+    if (!area) {
+        const desc = data.descripcion || data.description || '';
+        const areaMatch = desc.match(/(\d+[,\d]*)\s*(m[2²]|sq\.?\s*ft|metros?\s*cuadrados?)/i);
+        if (areaMatch) {
+            area = areaMatch[0];
+            console.log("Extracted area from description:", area);
+        }
+    }
+
+    // Combine all amenities/features
+    const allFeatures = [
+        ...(data.amenidades || []),
+        ...(data.amenities || []),
+        ...(data.caracteristicas || []),
+        ...(data.features || [])
+    ].filter((f: any) => f && typeof f === 'string');
+
+    // Get description - prefer longer descriptions
+    let description = data.descripcion || data.description || title || "Luxury property in Panama";
+
+    // If description is too short, try to combine with other text
+    if (description.length < 100 && data.detalles && Array.isArray(data.detalles)) {
+        const detailsText = data.detalles.join('. ');
+        if (detailsText.length > description.length) {
+            description = detailsText;
+        }
+    }
+
+    console.log("Mapped data:", {
+        title: title ? "✓" : "✗",
+        price: price ? "✓" : "✗",
+        area: area ? "✓" : "✗",
+        bedrooms: bedrooms ? "✓" : "✗",
+        bathrooms: bathrooms ? "✗" : "✗",
+        description: description.length + " chars",
+        features: allFeatures.length + " items"
+    });
 
     return {
         title: cleanText(title || "Property Listing"),
@@ -475,8 +519,8 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
         bedrooms,
         bathrooms,
         area,
-        description: cleanText(data.descripcion || data.description || title || "Luxury property in Panama"),
-        features: (data.amenidades || data.amenities || data.caracteristicas || data.features || []).map((f: string) => cleanText(f)),
+        description: cleanText(description),
+        features: allFeatures.map((f: string) => cleanText(f)),
         images: [], // Images will be extracted separately
         source: hostname
     };
