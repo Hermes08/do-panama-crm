@@ -738,41 +738,29 @@ export const handler: Handler = async (event: HandlerEvent) => {
         // Check if we have a structured extraction schema for this URL
         const extractionSchema = getSchemaForUrl(url);
 
-        let propertyData: PropertyData;
+        let propertyData: PropertyData = {
+            title: '',
+            price: '',
+            location: '',
+            description: '',
+            features: [],
+            images: [],
+            bedrooms: '',
+            bathrooms: '',
+            area: '',
+            source: 'Encuentra24'
+        };
 
         if (extractionSchema) {
             // USE STRUCTURED EXTRACTION for supported sites
             console.log("Using structured extraction with schema");
             logDebug(debugLogArray, `Using structured schema for domain: ${new URL(url).hostname}`);
 
-            const fcResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${FIRECRAWL_API_KEY}`
-                },
-                body: JSON.stringify({
-                    url: url,
-                    extractorOptions: {
-                        extractionSchema: extractionSchema,
-                        mode: "llm-extraction"
-                    },
-                    pageOptions: {
-                        onlyMainContent: true,
-                        includeHtml: true // Still get HTML for image extraction
-                    }
-                })
-            });
+            let fcData: any = null;
 
-            if (!fcResponse.ok) {
-                logDebug(debugLogArray, `FireCrawl Structured Extraction failed with status ${fcResponse.status}`);
-
-                // RETRY LOGIC: If structured extraction fails (500 or other), try basic scrape to get HTML
-                // This is critical for Encuentra24 which might block the "smart" extraction but allow basic access
-                console.log("Retrying with authentication-only scrape (no schema)...");
-                logDebug(debugLogArray, "Retrying with basic HTML scrape...");
-
-                const retryResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
+            try {
+                // PRIMARY ATTEMPT: Structured Extraction
+                let fcResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -780,108 +768,124 @@ export const handler: Handler = async (event: HandlerEvent) => {
                     },
                     body: JSON.stringify({
                         url: url,
+                        extractorOptions: {
+                            extractionSchema: extractionSchema,
+                            mode: "llm-extraction"
+                        },
                         pageOptions: {
-                            onlyMainContent: false, // Get full HTML
+                            onlyMainContent: true,
                             includeHtml: true
                         }
                     })
                 });
 
-                if (!retryResponse.ok) {
-                    logDebug(debugLogArray, `Retry failed with status ${retryResponse.status}`);
-                    throw new Error(`FireCrawl API failed: ${fcResponse.status} (Retry: ${retryResponse.status})`);
-                }
+                if (!fcResponse.ok) {
+                    logDebug(debugLogArray, `FireCrawl Structured Extraction failed with status ${fcResponse.status}`);
+                    console.log("Retrying with authentication-only scrape (no schema)...");
+                    logDebug(debugLogArray, "Retrying with basic HTML scrape...");
 
-                // If retry succeeds, use this data for fallback HTML extraction
-                const retryData = await retryResponse.json();
-                if (retryData.success && retryData.data && retryData.data.html) {
-                    logDebug(debugLogArray, "Retry successful, proceeding with HTML extraction");
-                    // Mock a "failed" structured data response so the flow falls through to HTML processing
-                    const $ = cheerio.load(retryData.data.html);
-                    propertyData = extractWithMultipleStrategies($, url, retryData.data.html, debugLogArray);
+                    // RETRY ATTEMPT: Basic Scrape
+                    const retryResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": `Bearer ${FIRECRAWL_API_KEY}`
+                        },
+                        body: JSON.stringify({
+                            url: url,
+                            pageOptions: {
+                                onlyMainContent: false, // Get full HTML
+                                includeHtml: true
+                            }
+                        })
+                    });
 
-                    // Add standard fields to match expected flow
-                    propertyData = await translateToEnglish(propertyData);
-                    propertyData.debugLog = debugLogArray;
+                    if (!retryResponse.ok) {
+                        throw new Error(`FireCrawl API failed: ${fcResponse.status} (Retry: ${retryResponse.status})`);
+                    }
 
-                    return {
-                        statusCode: 200,
-                        headers,
-                        body: JSON.stringify(propertyData),
-                    };
-                }
-
-                throw new Error(`FireCrawl API failed: ${fcResponse.status} ${fcResponse.statusText}`);
-            }
-
-            const fcData = await fcResponse.json();
-            logDebug(debugLogArray, "FireCrawl response received successfully");
-
-            console.log("FireCrawl response keys:", Object.keys(fcData));
-            console.log("FireCrawl data keys:", fcData.data ? Object.keys(fcData.data) : "no data");
-
-            if (!fcData.success || !fcData.data) {
-                console.error("FireCrawl unsuccessful response:", JSON.stringify(fcData, null, 2));
-                logDebug(debugLogArray, "FireCrawl response indicated failure or no data");
-                throw new Error("FireCrawl returned unsuccessful response");
-            }
-
-            // Map structured data to PropertyData
-            // Try multiple possible locations for the extracted data
-            const structuredData =
-                fcData.data.llm_extraction ||
-                fcData.data.extract ||
-                fcData.data.extraction ||
-                fcData.data;
-
-            console.log("Structured data:", JSON.stringify(structuredData, null, 2));
-            logDebug(debugLogArray, `Structured data keys found: ${Object.keys(structuredData || {}).join(', ')}`);
-
-            const mappedData = mapStructuredDataToPropertyData(structuredData, url, debugLogArray);
-
-            if (!mappedData) {
-                logDebug(debugLogArray, "Mapping structured data failed (or rejected), falling back to HTML");
-
-                // FALLBACK: If structured extraction fails, fall back to HTML scraping
-                if (fcData.data.html) {
-                    const $ = cheerio.load(fcData.data.html);
-                    propertyData = extractWithMultipleStrategies($, url, fcData.data.html, debugLogArray);
-                    logDebug(debugLogArray, "Fallback HTML extraction completed");
-                } else {
-                    throw new Error("Failed to map structured data to PropertyData and no HTML available for fallback");
-                }
-            } else {
-                propertyData = mappedData;
-
-                // IMPROVEMENT: Check if description is missing or too short, and try to use markdown
-                if ((!propertyData.description || propertyData.description.length < 50 || propertyData.description === "Luxury property in Panama") && fcData.data.markdown) {
-                    console.log("Structured description missing or short. Using markdown fallback.");
-                    logDebug(debugLogArray, "Structured description missing or short. Using markdown fallback.");
-                    // Remove links and images from markdown to get clean text
-                    let cleanMarkdown = fcData.data.markdown
-                        .replace(/!\[.*?\]\(.*?\)/g, "") // Remove images
-                        .replace(/\[([^\]]+)\]\(.*?\)/g, "$1") // Remove links but keep text
-                        .replace(/<[^>]*>/g, "") // Remove HTML tags
-                        .replace(/\n+/g, "\n") // Normalize newlines
-                        .trim();
-
-                    if (cleanMarkdown.length > 50) {
-                        propertyData.description = cleanMarkdown.substring(0, 2000); // Limit to 2000 chars
-                        logDebug(debugLogArray, `Markdown fallback successful (${propertyData.description.length} chars)`);
+                    const retryData = await retryResponse.json();
+                    if (retryData.success && retryData.data && retryData.data.html) {
+                        logDebug(debugLogArray, "Retry successful, proceeding with HTML extraction");
+                        fcData = retryData;
                     } else {
-                        logDebug(debugLogArray, "Markdown fallback too short/empty");
+                        throw new Error("Retry response invalid");
+                    }
+                } else {
+                    fcData = await fcResponse.json();
+                    if (!fcData.success || !fcData.data) {
+                        throw new Error("FireCrawl returned unsuccessful response");
+                    }
+                    logDebug(debugLogArray, "FireCrawl response received successfully");
+                }
+
+            } catch (fireCrawlError) {
+                console.error("FireCrawl failed, attempting direct fetch fallback:", fireCrawlError);
+                logDebug(debugLogArray, `FireCrawl failed (${fireCrawlError}). Attempting direct fetch fallback...`);
+
+                // FINAL FALLBACK: Direct Fetch
+                try {
+                    const directResponse = await fetch(url, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                            'Accept-Language': 'es-419,es;q=0.9,en;q=0.8'
+                        }
+                    });
+
+                    if (directResponse.ok) {
+                        const html = await directResponse.text();
+                        logDebug(debugLogArray, "Direct fetch successful. Using extracted HTML.");
+                        // Mock structure
+                        fcData = {
+                            success: true,
+                            data: {
+                                html: html,
+                                extraction: {},
+                                markdown: ""
+                            }
+                        };
+                    } else {
+                        logDebug(debugLogArray, `Direct fetch failed: ${directResponse.status}`);
+                        throw fireCrawlError; // Throw original error
+                    }
+                } catch (directError) {
+                    logDebug(debugLogArray, `Direct fetch error: ${directError}`);
+                    throw fireCrawlError; // Throw original error
+                }
+            }
+
+            // PROCESSING DATA
+            if (fcData && fcData.data) {
+                // Map structured data to PropertyData
+                const structuredData = fcData.data.llm_extraction || fcData.data.extract || fcData.data.extraction || fcData.data;
+
+                logDebug(debugLogArray, `Structured data keys found: ${Object.keys(structuredData || {}).join(', ')}`);
+                const mappedData = mapStructuredDataToPropertyData(structuredData, url, debugLogArray);
+
+                if (!mappedData) {
+                    logDebug(debugLogArray, "Mapping structured data failed (or rejected), falling back to HTML");
+                    if (fcData.data.html) {
+                        const $ = cheerio.load(fcData.data.html);
+                        propertyData = extractWithMultipleStrategies($, url, fcData.data.html, debugLogArray);
+                        logDebug(debugLogArray, "Fallback HTML extraction completed");
+                    } else {
+                        throw new Error("No HTML available for fallback");
+                    }
+                } else {
+                    propertyData = mappedData;
+                    // Description fallback check...
+                    if ((!propertyData.description || propertyData.description.length < 50) && fcData.data.markdown) {
+                        let cleanMarkdown = fcData.data.markdown.replace(/!\[.*?\]\(.*?\)/g, "").replace(/\[([^\]]+)\]\(.*?\)/g, "$1").replace(/<[^>]*>/g, "").trim();
+                        if (cleanMarkdown.length > 50) propertyData.description = cleanMarkdown.substring(0, 2000);
+                    }
+                    if (fcData.data.html) {
+                        const $ = cheerio.load(fcData.data.html);
+                        const imgs = extractPropertyImages($, url);
+                        if (imgs.length > 0) propertyData.images = [...new Set([...propertyData.images, ...imgs])];
                     }
                 }
-
-                // Extract images from HTML if available
-                if (fcData.data.html) {
-                    const $ = cheerio.load(fcData.data.html);
-                    propertyData.images = extractPropertyImages($, url);
-                    console.log(`Extracted ${propertyData.images.length} property images`);
-                    logDebug(debugLogArray, `Extracted ${propertyData.images.length} property images from HTML`);
-                }
             }
-
         } else {
             // FALLBACK: Use HTML scraping for unsupported sites
             console.log("Using HTML scraping (no schema available)");
@@ -962,8 +966,8 @@ export const handler: Handler = async (event: HandlerEvent) => {
             headers,
             body: JSON.stringify({
                 error: "Failed to scrape property data",
-                details: error instanceof Error ? error.message : "Unknown error",
-                debugLog: debugLogArray
+                details: error instanceof Error ? error.message : "Undefined error",
+                debugLog: debugLogArray,
             }),
         };
     }
