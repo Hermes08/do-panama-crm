@@ -25,11 +25,15 @@ export default function PresentationView({ data, isEditing, onSave }: Presentati
         if (!isEditing) return;
 
         const timer = setTimeout(() => {
-            onSave(editedData);
-        }, 1000); // Save 1 second after last edit
+            // Only save if data has actually changed
+            if (JSON.stringify(editedData) !== JSON.stringify(data)) {
+                console.log("Auto-saving changes...");
+                onSave(editedData);
+            }
+        }, 1500); // Save 1.5 seconds after last edit
 
         return () => clearTimeout(timer);
-    }, [editedData, isEditing]);
+    }, [editedData, isEditing, onSave, data]);
 
     const updateField = (field: keyof PropertyData, value: any) => {
         setEditedData(prev => ({ ...prev, [field]: value }));
