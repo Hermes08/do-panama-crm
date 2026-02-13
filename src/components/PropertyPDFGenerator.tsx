@@ -22,6 +22,7 @@ interface PropertyData {
     features: string[];
     images: string[];
     source: string;
+    debugLog?: string[];
 }
 
 interface PropertyPDFGeneratorProps {
@@ -358,7 +359,8 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                                         "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1000&q=80",
                                         "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1000&q=80"
                                     ],
-                                    source: "demo"
+                                    source: "demo",
+                                    debugLog: ["Sample log 1", "Sample log 2: Something happened", "Sample log 3: Another event"]
                                     // @ts-ignore
                                 });
                             }}
@@ -395,6 +397,26 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                             </button>
                         </div>
                     </div>
+
+                    {/* Debug Log Section */}
+                    {propertyData.debugLog && propertyData.debugLog.length > 0 && (
+                        <div className="mb-4">
+                            <details className="glass-card bg-black/20 border border-yellow-500/30">
+                                <summary className="p-3 cursor-pointer text-yellow-500 font-mono text-xs flex items-center gap-2 hover:bg-white/5 transition-colors">
+                                    <Sparkles className="w-4 h-4" />
+                                    Show Extraction Debug Logs ({propertyData.debugLog.length} lines)
+                                </summary>
+                                <div className="p-3 max-h-60 overflow-y-auto font-mono text-xs text-white/70 bg-black/40 space-y-1">
+                                    {propertyData.debugLog.map((log, i) => (
+                                        <div key={i} className="border-b border-white/5 pb-1 last:border-0 last:pb-0">
+                                            {log}
+                                        </div>
+                                    ))}
+                                </div>
+                            </details>
+                        </div>
+                    )}
+
                     <button
                         onClick={handleTranslate}
                         disabled={translating}

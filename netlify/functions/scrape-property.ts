@@ -12,6 +12,17 @@ interface PropertyData {
     features: string[];
     images: string[];
     source: string;
+    debugLog?: string[];
+}
+
+// Global debug log container for the current execution
+let currentDebugLog: string[] = [];
+
+function logDebug(message: string) {
+    const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+    const msg = `[${timestamp}] ${message}`;
+    console.log(msg);
+    currentDebugLog.push(msg);
 }
 
 // Helper function to decode HTML entities and preserve UTF-8 characters
@@ -422,13 +433,18 @@ function getSchemaForUrl(url: string): any | null {
 
 // Map structured data from FireCrawl to PropertyData format
 function mapStructuredDataToPropertyData(data: any, url: string): PropertyData | null {
+    logDebug("Mapping structured data to PropertyData...");
+
     // Accept both 'titulo' (Spanish) and 'title' (English)
     const title = data?.titulo || data?.title;
     const price = data?.precio || data?.price;
 
+    logDebug(`Found title: ${title ? 'Yes' : 'No'} ("${title?.substring(0, 30)}...")`);
+    logDebug(`Found price: ${price ? 'Yes' : 'No'} ("${price}")`);
+
     // If we don't have at least title or price, return null
     if (!title && !price) {
-        console.log("No title or price found in structured data");
+        logDebug("No title or price found in structured data, returning null");
         return null;
     }
 
@@ -446,12 +462,15 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
 
     // PRIORITY 1: Check if area is directly provided
     area = data.area || data.superficie || data.size;
+    if (area) logDebug(`Found area directly: ${area}`);
 
     const allDetails = [
         ...(data.detalles || []),
         ...(data.caracteristicas || []),
         ...(data.features || [])
     ];
+
+    logDebug(`Processing ${allDetails.length} details items for regex extraction`);
 
     for (const detail of allDetails) {
         if (!detail || typeof detail !== 'string') continue;
@@ -460,16 +479,19 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
         // Bedrooms
         if (!bedrooms && /\d+\s*(hab|rec[aá]mara|bedroom|cuarto|dormitorio)/i.test(detail)) {
             bedrooms = detail;
+            logDebug(`Extracted bedrooms from detail: "${detail}"`);
         }
 
         // Bathrooms
         if (!bathrooms && /\d+(\.\d+)?\s*(ba[ñn]o|bathroom)/i.test(detail)) {
             bathrooms = detail;
+            logDebug(`Extracted bathrooms from detail: "${detail}"`);
         }
 
         // Area - IMPROVED REGEX
         if (!area && /\d+[,\d]*\s*(m[2²]|sq\.?\s*ft|metro|square|área)/i.test(detail)) {
             area = detail;
+            logDebug(`Extracted area from detail: "${detail}"`);
         }
     }
 
@@ -479,7 +501,9 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
         const areaMatch = desc.match(/(\d+[,\d]*)\s*(m[2²]|sq\.?\s*ft|metros?\s*cuadrados?)/i);
         if (areaMatch) {
             area = areaMatch[0];
-            console.log("Extracted area from description:", area);
+            logDebug(`Extracted area from description fallback: "${area}"`);
+        } else {
+            logDebug("Could not extract area from description");
         }
     }
 
@@ -493,12 +517,14 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
 
     // Get description - prefer longer descriptions
     let description = data.descripcion || data.description || title || "Luxury property in Panama";
+    logDebug(`Initial description length: ${description.length}`);
 
     // If description is too short, try to combine with other text
     if (description.length < 100 && data.detalles && Array.isArray(data.detalles)) {
         const detailsText = data.detalles.join('. ');
         if (detailsText.length > description.length) {
             description = detailsText;
+            logDebug(`Replaced short description with details text (${description.length} chars)`);
         }
     }
 
@@ -511,6 +537,7 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
         description: description.length + " chars",
         features: allFeatures.length + " items"
     });
+    logDebug("Mapped data successfully");
 
     return {
         title: cleanText(title || "Property Listing"),
@@ -661,11 +688,14 @@ function isValidPropertyImage(src: string): boolean {
         srcLower.includes('imgix') ||
         srcLower.includes('cloudfront') ||
         srcLower.includes('akamai');
-
     return hasImageExtension || isCDN;
 }
 
 export const handler: Handler = async (event: HandlerEvent) => {
+    // Reset debug log for this request
+    currentDebugLog = [];
+    logDebug("Starting scrape request");
+
     const headers = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Content-Type",
@@ -686,6 +716,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
 
     try {
         const { url } = JSON.parse(event.body || "{}");
+        logDebug(`Target URL: ${url}`);
 
         if (!url) {
             return {
@@ -708,6 +739,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
         if (extractionSchema) {
             // USE STRUCTURED EXTRACTION for supported sites
             console.log("Using structured extraction with schema");
+            logDebug(`Using structured schema for domain: ${new URL(url).hostname}`);
 
             const fcResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
                 method: "POST",
@@ -729,16 +761,19 @@ export const handler: Handler = async (event: HandlerEvent) => {
             });
 
             if (!fcResponse.ok) {
+                logDebug(`FireCrawl API failed with status ${fcResponse.status}`);
                 throw new Error(`FireCrawl API failed: ${fcResponse.status} ${fcResponse.statusText}`);
             }
 
             const fcData = await fcResponse.json();
+            logDebug("FireCrawl response received successfully");
 
             console.log("FireCrawl response keys:", Object.keys(fcData));
             console.log("FireCrawl data keys:", fcData.data ? Object.keys(fcData.data) : "no data");
 
             if (!fcData.success || !fcData.data) {
                 console.error("FireCrawl unsuccessful response:", JSON.stringify(fcData, null, 2));
+                logDebug("FireCrawl response indicated failure or no data");
                 throw new Error("FireCrawl returned unsuccessful response");
             }
 
@@ -751,11 +786,13 @@ export const handler: Handler = async (event: HandlerEvent) => {
                 fcData.data;
 
             console.log("Structured data:", JSON.stringify(structuredData, null, 2));
+            logDebug(`Structured data keys found: ${Object.keys(structuredData || {}).join(', ')}`);
 
             const mappedData = mapStructuredDataToPropertyData(structuredData, url);
 
             if (!mappedData) {
                 console.error("Failed to map data. Structured data was:", JSON.stringify(structuredData, null, 2));
+                logDebug("Mapping structured data failed, falling back to HTML");
 
                 // FALLBACK: If structured extraction fails, fall back to HTML scraping
                 console.log("Falling back to HTML scraping...");
@@ -771,6 +808,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
                 // IMPROVEMENT: Check if description is missing or too short, and try to use markdown
                 if ((!propertyData.description || propertyData.description.length < 50 || propertyData.description === "Luxury property in Panama") && fcData.data.markdown) {
                     console.log("Structured description missing or short. Using markdown fallback.");
+                    logDebug("Structured description missing or short. Using markdown fallback.");
                     // Remove links and images from markdown to get clean text
                     let cleanMarkdown = fcData.data.markdown
                         .replace(/!\[.*?\]\(.*?\)/g, "") // Remove images
@@ -781,6 +819,9 @@ export const handler: Handler = async (event: HandlerEvent) => {
 
                     if (cleanMarkdown.length > 50) {
                         propertyData.description = cleanMarkdown.substring(0, 2000); // Limit to 2000 chars
+                        logDebug(`Markdown fallback successful (${propertyData.description.length} chars)`);
+                    } else {
+                        logDebug("Markdown fallback too short/empty");
                     }
                 }
 
@@ -789,12 +830,14 @@ export const handler: Handler = async (event: HandlerEvent) => {
                     const $ = cheerio.load(fcData.data.html);
                     propertyData.images = extractPropertyImages($, url);
                     console.log(`Extracted ${propertyData.images.length} property images`);
+                    logDebug(`Extracted ${propertyData.images.length} property images from HTML`);
                 }
             }
 
         } else {
             // FALLBACK: Use HTML scraping for unsupported sites
             console.log("Using HTML scraping (no schema available)");
+            logDebug("No schema found for this domain, using generic HTML scraping");
 
             const fcResponse = await fetch("https://api.firecrawl.dev/v0/scrape", {
                 method: "POST",
@@ -813,16 +856,20 @@ export const handler: Handler = async (event: HandlerEvent) => {
             });
 
             if (!fcResponse.ok) {
+                logDebug(`FireCrawl API failed with status ${fcResponse.status}`);
                 throw new Error(`FireCrawl API failed: ${fcResponse.status} ${fcResponse.statusText}`);
             }
 
             const fcData = await fcResponse.json();
 
             if (!fcData.success || !fcData.data) {
+                logDebug("FireCrawl response indicated failure");
                 throw new Error("FireCrawl returned unsuccessful response");
             }
 
             const html = fcData.data.html || fcData.data.content;
+            logDebug(`Received HTML of length ${html?.length || 0}`);
+
             const $ = cheerio.load(html);
 
             // ULTRA AGGRESSIVE MULTI-STRATEGY EXTRACTION
@@ -830,12 +877,14 @@ export const handler: Handler = async (event: HandlerEvent) => {
 
             // EXTRA CLEANING: If FireCrawl provided markdown, use it to pick a cleaner description
             if (fcData.data.markdown && (!propertyData.description || propertyData.description.length < 100)) {
+                logDebug("Using markdown for description in generic scraping");
                 propertyData.description = fcData.data.markdown.substring(0, 1500);
             }
         }
 
         // STEP 1: Remove private information (company names, agent info, phone numbers, emails)
         console.log("Removing private information...");
+        logDebug("Removing private information...");
         propertyData.title = removePrivateInfo(propertyData.title);
         propertyData.description = removePrivateInfo(propertyData.description);
         propertyData.location = removePrivateInfo(propertyData.location);
@@ -845,7 +894,12 @@ export const handler: Handler = async (event: HandlerEvent) => {
         if (propertyData.area) propertyData.area = removePrivateInfo(propertyData.area);
 
         // STEP 2: Translate to English
+        logDebug("Starting translation...");
         propertyData = await translateToEnglish(propertyData);
+        logDebug("Translation finished");
+
+        // Attach debug log to response
+        propertyData.debugLog = currentDebugLog;
 
         return {
             statusCode: 200,
@@ -853,13 +907,15 @@ export const handler: Handler = async (event: HandlerEvent) => {
             body: JSON.stringify(propertyData),
         };
     } catch (error) {
+        logDebug(`Error occurred: ${error instanceof Error ? error.message : String(error)}`);
         console.error("Scraping error:", error);
         return {
             statusCode: 500,
             headers,
             body: JSON.stringify({
                 error: "Failed to scrape property data",
-                details: error instanceof Error ? error.message : "Unknown error"
+                details: error instanceof Error ? error.message : "Unknown error",
+                debugLog: currentDebugLog
             }),
         };
     }
