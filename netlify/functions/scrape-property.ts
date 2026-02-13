@@ -20,6 +20,25 @@ interface PropertyData {
 // Global API Key
 const FIRECRAWL_API_KEY = "fc-c3b388c7f1e14ef8a3fa5e3334b71add";
 
+// Response Helpers
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const successResponse = (payload: Record<string, unknown>, statusCode = 200) => ({
+    statusCode,
+    headers: corsHeaders,
+    body: JSON.stringify(payload),
+});
+
+const errorResponse = (message: string, debug: string[], statusCode = 500, details?: string) => ({
+    statusCode,
+    headers: corsHeaders,
+    body: JSON.stringify({ error: message, debugLog: debug, details }),
+});
+
 // Request-scoped logger helper
 function logDebug(debugLog: string[], message: string) {
     const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
@@ -157,23 +176,206 @@ async function translateToEnglish(data: PropertyData): Promise<PropertyData> {
     }
 }
 
+// STRATEGY 1: CSS Selectors
+function trySelectors($: ReturnType<typeof cheerio.load>, selectors: string[], attr?: string): string {
+    for (const sel of selectors) {
+        try {
+            if (attr) {
+                const val = $(sel).attr(attr);
+                if (val && val.trim().length > 0) return val.trim();
+            } else {
+                const val = $(sel).text();
+                // Special handling for meta description to avoid "undefined" or generic text
+                if (sel.includes('meta') && val.trim().length > 0) return val.trim();
+
+                // For other text nodes, basic validation
+                if (val && val.trim().length > 0) return val.trim();
+            }
+        } catch (e) {
+            // Ignore selector errors
+        }
+    }
+    return '';
+}
+
+function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: string, html: string, debugLog: string[]): Partial<PropertyData> {
+    const propertyData: Partial<PropertyData> = {
+        title: "",
+        price: "",
+        location: "",
+        description: "",
+        features: [],
+        images: [],
+        bedrooms: "",
+        bathrooms: "",
+        area: "",
+        source: "Unknown"
+    };
+
+    // Title
+    propertyData.title = trySelectors($, [
+        'h1.title', 'h1.property-title', '.listing-title', 'h1',
+        'meta[property="og:title"]', 'title'
+    ]);
+
+    // Description
+    propertyData.description = trySelectors($, [
+        '.property-description', '.description', '#description',
+        'meta[property="og:description"]', 'meta[name="description"]'
+    ], 'content');
+
+    return propertyData;
+}
+
+// Validate if an image URL is likely a property image
+function isValidPropertyImage(src: string): boolean {
+    if (!src) return false;
+
+    // Must be a full URL
+    if (!src.startsWith('http')) return false;
+
+    // Exclude common non-property images
+    const excludePatterns = [
+        'logo', 'icon', 'avatar', 'badge', 'button',
+        'banner', 'ad', 'advertisement', 'sponsor',
+        'facebook', 'twitter', 'instagram', 'whatsapp',
+        'pixel', 'tracking', 'analytics',
+        '1x1', 'spacer', 'blank',
+        'favicon', 'sprite'
+    ];
+
+    const srcLower = src.toLowerCase();
+    for (const pattern of excludePatterns) {
+        if (srcLower.includes(pattern)) return false;
+    }
+
+    // Must be an image file
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+    const hasImageExtension = imageExtensions.some(ext => srcLower.includes(ext));
+
+    // Allow if has image extension OR is from a CDN (CDNs often don't show extensions)
+    const isCDN = srcLower.includes('cloudinary') ||
+        srcLower.includes('imgix') ||
+        srcLower.includes('cloudfront') ||
+        srcLower.includes('akamai');
+    return hasImageExtension || isCDN;
+}
+
+// Extract property images with site-specific selectors
+function extractPropertyImages($: ReturnType<typeof cheerio.load>, url: string): string[] {
+    const images: string[] = [];
+    const seenImages = new Set<string>();
+
+    const hostname = new URL(url).hostname.replace('www.', '');
+
+    // 1. Always try OG Image first (usually the main property image)
+    const ogImg = $('meta[property="og:image"]').attr('content');
+    if (ogImg && !seenImages.has(ogImg)) {
+        images.push(ogImg);
+        seenImages.add(ogImg);
+    }
+
+    // 2. Site-specific gallery selectors
+    let gallerySelectors: string[] = [];
+
+    if (hostname.includes('encuentra24.com')) {
+        gallerySelectors = [
+            '.gallery-image img',
+            '.carousel-item img',
+            '.property-gallery img',
+            '.photo-gallery img',
+            '[class*="gallery"] img',
+            '[class*="slider"] img',
+            '[id*="gallery"] img'
+        ];
+    } else if (hostname.includes('jamesedition.com')) {
+        gallerySelectors = [
+            '.gallery img',
+            '.image-gallery img',
+            '[class*="Gallery"] img',
+            '[class*="carousel"] img',
+            '.listing-images img'
+        ];
+    } else if (hostname.includes('compreoalquile.com')) {
+        gallerySelectors = [
+            '.gallery img',
+            '.property-images img',
+            '[class*="gallery"] img',
+            '[class*="slider"] img'
+        ];
+    } else if (hostname.includes('mlsacobir.com')) {
+        gallerySelectors = [
+            '.property-gallery img',
+            '.listing-gallery img',
+            '[class*="gallery"] img',
+            '[class*="photo"] img'
+        ];
+    } else {
+        // Generic gallery selectors for unknown sites
+        gallerySelectors = [
+            '[class*="gallery"] img',
+            '[class*="Gallery"] img',
+            '[id*="gallery"] img',
+            '[class*="slider"] img',
+            '[class*="carousel"] img',
+            '[class*="photo"] img',
+            'main img',
+            '.content img',
+            '#content img'
+        ];
+    }
+
+    // Try each selector in order
+    for (const selector of gallerySelectors) {
+        $(selector).each((_, el) => {
+            const src = $(el).attr('src') ||
+                $(el).attr('data-src') ||
+                $(el).attr('data-original') ||
+                $(el).attr('data-lazy') ||
+                $(el).attr('data-image');
+
+            if (src && isValidPropertyImage(src) && !seenImages.has(src)) {
+                images.push(src);
+                seenImages.add(src);
+            }
+        });
+
+        // If we found good images, stop searching
+        if (images.length >= 5) break;
+    }
+
+    // 3. Fallback: If still no images, try all images but with strict filtering
+    if (images.length < 3) {
+        $('img').each((_, el) => {
+            const src = $(el).attr('src') || $(el).attr('data-src');
+            if (src && isValidPropertyImage(src) && !seenImages.has(src)) {
+                // Additional size check - property images are usually larger
+                const width = parseInt($(el).attr('width') || '0');
+                const height = parseInt($(el).attr('height') || '0');
+
+                // Skip small images (likely icons/logos)
+                if (width > 200 || height > 200 || (!width && !height)) {
+                    images.push(src);
+                    seenImages.add(src);
+                }
+            }
+        });
+    }
+
+    return images.slice(0, 15); // Return up to 15 images
+}
+
 // Main Handler
 export const handler: Handler = async (event: HandlerEvent) => {
     const debugLogArray: string[] = [];
     logDebug(debugLogArray, "Starting scrape request (SDK Version)");
 
-    const headers = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-    };
-
-    if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers, body: "" };
-    if (event.httpMethod !== "POST") return { statusCode: 405, headers, body: JSON.stringify({ error: "Method not allowed" }) };
+    if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: corsHeaders, body: "" };
+    if (event.httpMethod !== "POST") return errorResponse("Method not allowed", debugLogArray, 405);
 
     try {
         const { url } = JSON.parse(event.body || "{}");
-        if (!url) throw new Error("URL is required");
+        if (!url) return errorResponse("URL is required", debugLogArray, 400);
 
         let propertyData: PropertyData = {
             title: '', price: '', location: '', description: '', features: [],
@@ -186,8 +388,6 @@ export const handler: Handler = async (event: HandlerEvent) => {
         logDebug(debugLogArray, `Identifying schema for ${hostname}`);
 
         try {
-            let extractionResult: any;
-
             if (hostname.includes("encuentra24.com")) {
                 const result = await app.agent({
                     prompt: "Extraer datos de la propiedad en la URL proporcionada, incluyendo descripción, amenidades, metraje, precio, cantidad de recámaras o detalles técnicos relevantes. Excluir números de contacto.",
@@ -284,7 +484,6 @@ export const handler: Handler = async (event: HandlerEvent) => {
             logDebug(debugLogArray, "Agent extraction successful");
 
             // Extract Images via fallback scrape (Agent doesn't return images reliably)
-            // Or we could have added images to schema, but usually Firecrawl scrape is better for HTML
             const scrapeResult = await app.scrapeUrl(url, { formats: ['html'] });
             if (scrapeResult.success && scrapeResult.html) {
                 const $ = cheerio.load(scrapeResult.html);
@@ -316,12 +515,14 @@ export const handler: Handler = async (event: HandlerEvent) => {
                 const $ = cheerio.load(html);
 
                 // Generic Extraction
-                propertyData.title = $('h1').first().text().trim() || $('title').text().trim();
-                propertyData.description = $('meta[name="description"]').attr('content') || "";
+                const fallbackData = extractWithMultipleStrategies($, url, html, debugLogArray);
+                propertyData = { ...propertyData, ...fallbackData };
 
-                // Try to find price
-                const priceMatch = html.match(/\$[\d,]+\.?\d*/);
-                if (priceMatch) propertyData.price = priceMatch[0];
+                // Try to find price if missing
+                if (!propertyData.price) {
+                    const priceMatch = html.match(/\$[\d,]+\.?\d*/);
+                    if (priceMatch) propertyData.price = priceMatch[0];
+                }
 
                 logDebug(debugLogArray, "Direct fetch fallback successful");
             } else {
@@ -335,315 +536,15 @@ export const handler: Handler = async (event: HandlerEvent) => {
         propertyData = await translateToEnglish(propertyData);
         propertyData.debugLog = debugLogArray;
 
-        return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify(propertyData),
-        };
+        return successResponse(propertyData as unknown as Record<string, unknown>);
 
     } catch (error) {
         console.error("Handler error:", error);
-        return {
-            statusCode: 500,
-            headers,
-            body: JSON.stringify({
-                error: "Failed to scrape property data",
-                details: error instanceof Error ? error.message : "Undefined error",
-                debugLog: debugLogArray,
-            }),
-        };
+        return errorResponse(
+            "Failed to scrape property data",
+            debugLogArray,
+            500,
+            error instanceof Error ? error.message : "Undefined error"
+        );
     }
-    logDebug(debugLog, "Starting multi-strategy extraction");
-
-    // ========== SPECIFIC STRATEGY: ENCUENTRA24 ==========
-    if (url.includes("encuentra24.com")) {
-        const e24 = extractEncuentra24($, html);
-        if (e24.title && e24.price) {
-            return {
-                title: e24.title,
-                price: e24.price,
-                location: e24.location || "Panama",
-                description: e24.description || "",
-                features: e24.features || [],
-                images: e24.images || [],
-                bedrooms: e24.bedrooms,
-                bathrooms: e24.bathrooms,
-                area: e24.area,
-                source: "Encuentra24"
-            };
-        }
-    }
-
-    // ========== TITLE (6 STRATEGIES) ==========
-    let title =
-        trySelectors($, ["h1", ".property-title", ".listing-title", "#property-title", "[class*='title']", "[itemprop='name']"]) ||
-        tryMetaTags($, ["og:title", "twitter:title", "title"]) ||
-        tryJSONLD($, "name") ||
-        $("title").text().trim() ||
-        "Property Listing";
-
-    title = title.substring(0, 200);
-
-    // ========== PRICE (8 STRATEGIES) ==========
-    let price =
-        trySelectors($, [".price", ".property-price", ".listing-price", "#price", "[class*='price']", "[class*='Price']", "[itemprop='price']"]) ||
-        tryMetaTags($, ["og:price:amount", "product:price:amount"]) ||
-        tryJSONLD($, "price") ||
-        tryRegex(html, [
-            /\$[\s]?[\d,]+(?:\.\d{2})?(?!\d)/g,
-            /USD[\s]?[\d,]+/gi,
-            /US\$[\s]?[\d,]+/g,
-            /Precio[:\s]+\$?[\d,]+/gi,
-            /Price[:\s]+\$?[\d,]+/gi
-        ], (match) => {
-            const num = parseInt(match.replace(/[^\d]/g, ''));
-            return num > 10000 && num < 100000000; // Reasonable property price range
-        }) ||
-        // Remove text analysis for price as it is too risky
-        "Contact for Price";
-
-    // ========== LOCATION (7 STRATEGIES) ==========
-    let location =
-        trySelectors($, [".location", ".property-location", ".address", "[class*='location']", "[class*='address']", "[itemprop='address']"]) ||
-        tryMetaTags($, ["og:locality", "og:region", "geo.placename"]) ||
-        tryJSONLD($, "address") ||
-        "Panama";
-
-    // ========== BEDROOMS (6 STRATEGIES) ==========
-    let bedrooms =
-        trySelectors($, ["[class*='bedroom']", "[class*='bed']", "[class*='habitacion']", "[itemprop='numberOfRooms']"]) ||
-        tryJSONLD($, "numberOfRooms") ||
-        tryRegex(html, [
-            /(\d+)\s*(?:bed|bedroom|habitacion|recamara|cuarto|dormitorio)s?/gi,
-            /(?:bed|bedroom|habitacion|dormitorio)s?[:\s]*(\d+)/gi,
-            /(\d+)\s*hab/gi
-        ], (match) => {
-            const num = parseInt(match.match(/\d+/)?.[0] || "0");
-            return num > 0 && num < 20;
-        });
-
-    if (bedrooms && !/bed/i.test(bedrooms)) {
-        const num = bedrooms.match(/\d+/)?.[0];
-        if (num) bedrooms = num + " beds";
-    }
-
-    // ========== BATHROOMS (6 STRATEGIES) ==========
-    let bathrooms =
-        trySelectors($, ["[class*='bathroom']", "[class*='bath']", "[class*='baño']", "[itemprop='numberOfBathroomsTotal']"]) ||
-        tryJSONLD($, "numberOfBathroomsTotal") ||
-        tryRegex(html, [
-            /(\d+(?:\.\d+)?)\s*(?:bath|bathroom|baño|baños)s?/gi,
-            /(?:bath|bathroom|baño)s?[:\s]*(\d+(?:\.\d+)?)/gi
-        ], (match) => {
-            const num = parseFloat(match.match(/\d+(?:\.\d+)?/)?.[0] || "0");
-            return num > 0 && num < 20;
-        });
-
-    if (bathrooms && !/bath/i.test(bathrooms)) {
-        const num = bathrooms.match(/\d+(?:\.\d+)?/)?.[0];
-        if (num) bathrooms = num + " baths";
-    }
-
-    // ========== AREA (6 STRATEGIES) ==========
-    let area =
-        trySelectors($, ["[class*='area']", "[class*='size']", "[class*='superficie']", "[itemprop='floorSize']"]) ||
-        tryJSONLD($, "floorSize") ||
-        tryRegex(html, [
-            /(\d+[,\d]*)\s*(?:m2|m²|metros?\s*cuadrados?)/gi,
-            /(\d+[,\d]*)\s*(?:sq\.?\s*ft|sqft|square\s*feet)/gi,
-            /(?:area|superficie|tamaño)[:\s]*(\d+[,\d]*)\s*(?:m2|m²)/gi
-        ], (match) => {
-            const num = parseInt(match.replace(/[^\d]/g, ''));
-            return num > 20 && num < 100000; // Reasonable area range
-        });
-
-    // ========== DESCRIPTION (7 STRATEGIES) ==========
-    // Cleanup HTML before extracting text
-    $("script, style, nav, footer, header, noscript, iframe").remove();
-
-    let description =
-        trySelectors($, [".description", ".property-description", "[class*='description']", "[itemprop='description']"]) ||
-        tryMetaTags($, ["og:description", "twitter:description", "description"]) ||
-        tryJSONLD($, "description");
-
-    // Fallback: Get longest paragraph logic (improved)
-    if (!description || description.length < 100) {
-        let maxLen = 0;
-        $("p").each((_, el) => {
-            const text = cleanText($(el).text());
-            if (text.length > maxLen && text.length > 50 &&
-                !text.toLowerCase().includes("cookie") &&
-                !text.toLowerCase().includes("privacy") &&
-                !text.includes("{")) { // Avoid JS
-                maxLen = text.length;
-                description = text;
-            }
-        });
-    }
-
-    if (!description) description = "Luxury property in Panama";
-    description = description.substring(0, 1500);
-
-    // ========== FEATURES (5 STRATEGIES) ==========
-    const features: string[] = [];
-    const seenFeatures = new Set<string>();
-
-    // Strategy: Look for UL/LI inside main content areas only
-    $("main, .content, #content, .details").find("li").each((_, el) => {
-        const text = cleanText($(el).text()).substring(0, 60);
-        if (isValidFeature(text) && !seenFeatures.has(text.toLowerCase())) {
-            seenFeatures.add(text.toLowerCase());
-            features.push(text);
-        }
-    });
-
-    if (features.length === 0) {
-        // Fallback to global LI if safe
-        $("li").each((_, el) => {
-            const text = cleanText($(el).text()).substring(0, 60);
-            if (isValidFeature(text) && !seenFeatures.has(text.toLowerCase()) &&
-                !["home", "about", "contact", "login"].includes(text.toLowerCase())) {
-                seenFeatures.add(text.toLowerCase());
-                features.push(text);
-            }
-        });
-    }
-
-    // ========== IMAGES ==========
-    const images = extractPropertyImages($, url);
-
-    return {
-        title: cleanText(title),
-        price: cleanText(price),
-        location: cleanText(location),
-        bedrooms: bedrooms ? cleanText(bedrooms) : undefined,
-        bathrooms: bathrooms ? cleanText(bathrooms) : undefined,
-        area: area ? cleanText(area) : undefined,
-        description: cleanText(description),
-        features: features.slice(0, 15), // Limit features (already cleaned)
-        images: images, // Already limited in extractPropertyImages
-        source: new URL(url).hostname
-    };
-}
-
-function extractEncuentra24($: ReturnType<typeof cheerio.load>, html: string): Partial<PropertyData> {
-    // 1. TITLE
-    // Try standard selector first, then fallback to meta tags
-    let title = cleanText($("h1").first().text());
-    if (!title) {
-        title = $('meta[property="og:title"]').attr('content') || '';
-        // Clean up common suffixes
-        title = title.replace('| Encuentra24.com', '').trim();
-    }
-
-    // 2. PRICE
-    // Look for price in specific containers or by currency regex
-    let price = cleanText($(".price, [class*='price']").first().text());
-    if (!price) {
-        // Fallback: finding price by text proximity
-        const priceElement = $("div:contains('Precio'), span:contains('Precio')").next();
-        if (priceElement.length) price = cleanText(priceElement.text());
-
-        // Regex fallback
-        if (!price) {
-            const priceMatch = html.match(/\$[\d,]+(?:\.\d{2})?/);
-            if (priceMatch) price = priceMatch[0];
-        }
-    }
-
-    // 3. LOCATION
-    let location = cleanText($(".location, [class*='address']").first().text());
-    if (!location) {
-        // Try breadcrumbs often found in E24
-        const breadcrumbs = $(".breadcrumb, .breadcrumbs").text();
-        if (breadcrumbs) location = cleanText(breadcrumbs.split('>').slice(-2).join(', '));
-
-        // Fallback to text proximity
-        if (!location) {
-            const locElement = $("div:contains('Ubicación'), span:contains('Ubicación')").next();
-            if (locElement.length) location = cleanText(locElement.text());
-        }
-    }
-
-    // 4. DETAILS (Bedrooms, Bathrooms, Area)
-    // Encuentra24 uses .info-details usually, but sometimes simple labeled lists
-    let bedrooms = cleanText($(".info-details .bedrooms, .info-details:contains('Recámaras') .value").text());
-    if (!bedrooms) {
-        const bedMatch = html.match(/(\d+)\s*(?:Rec?maras|Recs?|Bedrooms?)/i);
-        if (bedMatch) bedrooms = bedMatch[1];
-    }
-
-    let bathrooms = cleanText($(".info-details .bathrooms, .info-details:contains('Baños') .value").text());
-    if (!bathrooms) {
-        const bathMatch = html.match(/(\d+(?:\.\d+)?)\s*(?:Ba?os|Baths?)/i);
-        if (bathMatch) bathrooms = bathMatch[1];
-    }
-
-    let area = cleanText($(".info-details .area, .info-details:contains('m²') .value").text());
-    if (!area) {
-        const areaMatch = html.match(/(\d+(?:,\d+)?)\s*(?:m2|m²|mt2)/i);
-        if (areaMatch) area = areaMatch[0];
-    }
-
-    // 5. DESCRIPTION
-    // Expand selectors for description
-    let description = cleanText($(".description-container, .description, #description, [itemprop='description']").text());
-    if (!description || description.length < 50) {
-        // Try getting text from generic content containers if specific classes fail
-        // Often E24 puts description in a simple div under a header
-        description = cleanText($("h2:contains('Detalles')").next('div, p').text());
-    }
-
-    // 6. FEATURES
-    const features: string[] = [];
-    $(".amenities li, .features li, ul.check-list li").each((_, el) => {
-        const feature = cleanText($(el).text());
-        if (feature) features.push(feature);
-    });
-
-    // 7. IMAGES
-    const images: string[] = [];
-    // Try all likely image containers
-    $(".gallery-image, .carousel-item img, .gallery-container img, .photo").each((_, el) => {
-        const src = $(el).attr("data-src") || $(el).attr("src") || $(el).attr("data-lazy-src");
-        if (src && src.startsWith("http") && !src.includes("background") && !src.includes("user")) {
-            images.push(src);
-        }
-    });
-
-    // Fallback: Extract from script tag if images are loaded via JS (common in E24)
-    if (images.length === 0) {
-        const scriptContent = $("script:contains('gallery')").text();
-        const imgMatches = scriptContent.match(/https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)/gi);
-        if (imgMatches) {
-            imgMatches.forEach(img => {
-                if (!images.includes(img) && !img.includes('thumb')) images.push(img);
-            });
-        }
-    }
-
-    return {
-        title,
-        price,
-        location,
-        bedrooms,
-        bathrooms,
-        area,
-        description,
-        features,
-        images: [...new Set(images)] // De-duplicate
-    };
-}
-
-function isValidFeature(text: string): boolean {
-    if (!text || text.length < 3 || text.length > 100) return false;
-
-    const invalidKeywords = [
-        "contacto", "contact", "agente", "agent", "whatsapp", "email",
-        "phone", "cookie", "privacy", "terms", "política", "aviso",
-        "copyright", "reserved", "rights", "©", "®", "™"
-    ];
-
-    const lowerText = text.toLowerCase();
-    return !invalidKeywords.some(kw => lowerText.includes(kw));
-}
+};
