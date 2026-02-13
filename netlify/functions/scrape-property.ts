@@ -768,6 +768,22 @@ export const handler: Handler = async (event: HandlerEvent) => {
             } else {
                 propertyData = mappedData;
 
+                // IMPROVEMENT: Check if description is missing or too short, and try to use markdown
+                if ((!propertyData.description || propertyData.description.length < 50 || propertyData.description === "Luxury property in Panama") && fcData.data.markdown) {
+                    console.log("Structured description missing or short. Using markdown fallback.");
+                    // Remove links and images from markdown to get clean text
+                    let cleanMarkdown = fcData.data.markdown
+                        .replace(/!\[.*?\]\(.*?\)/g, "") // Remove images
+                        .replace(/\[([^\]]+)\]\(.*?\)/g, "$1") // Remove links but keep text
+                        .replace(/<[^>]*>/g, "") // Remove HTML tags
+                        .replace(/\n+/g, "\n") // Normalize newlines
+                        .trim();
+
+                    if (cleanMarkdown.length > 50) {
+                        propertyData.description = cleanMarkdown.substring(0, 2000); // Limit to 2000 chars
+                    }
+                }
+
                 // Extract images from HTML if available
                 if (fcData.data.html) {
                     const $ = cheerio.load(fcData.data.html);
