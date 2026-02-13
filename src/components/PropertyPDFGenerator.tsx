@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Download, Loader2, CheckCircle, XCircle, Image as ImageIcon, Video, Sparkles, Zap, ExternalLink } from "lucide-react";
+import { FileText, Download, Loader2, CheckCircle, XCircle, Image as ImageIcon, Video, Sparkles, Zap, ExternalLink, Edit2 } from "lucide-react";
 import { translatePropertyData } from "@/lib/translator";
 import { generatePropertyPDF } from "@/lib/pdfGenerator";
 import { generatePropertyVideo } from "@/lib/videoGenerator";
