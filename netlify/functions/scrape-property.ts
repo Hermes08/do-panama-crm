@@ -15,14 +15,12 @@ interface PropertyData {
     debugLog?: string[];
 }
 
-// Global debug log container for the current execution
-let currentDebugLog: string[] = [];
-
-function logDebug(message: string) {
+// Request-scoped logger helper
+function logDebug(debugLog: string[], message: string) {
     const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
     const msg = `[${timestamp}] ${message}`;
     console.log(msg);
-    currentDebugLog.push(msg);
+    debugLog.push(msg);
 }
 
 // Helper function to decode HTML entities and preserve UTF-8 characters
@@ -432,20 +430,26 @@ function getSchemaForUrl(url: string): any | null {
 }
 
 // Map structured data from FireCrawl to PropertyData format
-function mapStructuredDataToPropertyData(data: any, url: string): PropertyData | null {
-    logDebug("Mapping structured data to PropertyData...");
+function mapStructuredDataToPropertyData(data: any, url: string, debugLog: string[]): PropertyData | null {
+    logDebug(debugLog, "Mapping structured data to PropertyData...");
 
     // Accept both 'titulo' (Spanish) and 'title' (English)
     const title = data?.titulo || data?.title;
     const price = data?.precio || data?.price;
 
-    logDebug(`Found title: ${title ? 'Yes' : 'No'} ("${title?.substring(0, 30)}...")`);
-    logDebug(`Found price: ${price ? 'Yes' : 'No'} ("${price}")`);
+    logDebug(debugLog, `Found title: ${title ? 'Yes' : 'No'} ("${title?.substring(0, 30)}...")`);
+    logDebug(debugLog, `Found price: ${price ? 'Yes' : 'No'} ("${price}")`);
 
     // If we don't have at least title or price, return null
     if (!title && !price) {
-        logDebug("No title or price found in structured data, returning null");
+        logDebug(debugLog, "No title or price found in structured data, returning null");
         return null;
+    }
+
+    // ANTI-BOT / INTERSTITIAL CHECK
+    if (title && (title.includes("Download our App") || title.includes("Pardon Our Interruption") || title.includes("Access Denied"))) {
+        logDebug(debugLog, "Detected anti-bot/interstitial page title. Treating as failed extraction.");
+        return null; // Force fallback
     }
 
     let hostname = "unknown";
@@ -462,7 +466,7 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
 
     // PRIORITY 1: Check if area is directly provided
     area = data.area || data.superficie || data.size;
-    if (area) logDebug(`Found area directly: ${area}`);
+    if (area) logDebug(debugLog, `Found area directly: ${area}`);
 
     const allDetails = [
         ...(data.detalles || []),
@@ -470,7 +474,7 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
         ...(data.features || [])
     ];
 
-    logDebug(`Processing ${allDetails.length} details items for regex extraction`);
+    logDebug(debugLog, `Processing ${allDetails.length} details items for regex extraction`);
 
     for (const detail of allDetails) {
         if (!detail || typeof detail !== 'string') continue;
@@ -479,19 +483,19 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
         // Bedrooms
         if (!bedrooms && /\d+\s*(hab|rec[aá]mara|bedroom|cuarto|dormitorio)/i.test(detail)) {
             bedrooms = detail;
-            logDebug(`Extracted bedrooms from detail: "${detail}"`);
+            logDebug(debugLog, `Extracted bedrooms from detail: "${detail}"`);
         }
 
         // Bathrooms
         if (!bathrooms && /\d+(\.\d+)?\s*(ba[ñn]o|bathroom)/i.test(detail)) {
             bathrooms = detail;
-            logDebug(`Extracted bathrooms from detail: "${detail}"`);
+            logDebug(debugLog, `Extracted bathrooms from detail: "${detail}"`);
         }
 
         // Area - IMPROVED REGEX
         if (!area && /\d+[,\d]*\s*(m[2²]|sq\.?\s*ft|metro|square|área)/i.test(detail)) {
             area = detail;
-            logDebug(`Extracted area from detail: "${detail}"`);
+            logDebug(debugLog, `Extracted area from detail: "${detail}"`);
         }
     }
 
@@ -501,9 +505,9 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
         const areaMatch = desc.match(/(\d+[,\d]*)\s*(m[2²]|sq\.?\s*ft|metros?\s*cuadrados?)/i);
         if (areaMatch) {
             area = areaMatch[0];
-            logDebug(`Extracted area from description fallback: "${area}"`);
+            logDebug(debugLog, `Extracted area from description fallback: "${area}"`);
         } else {
-            logDebug("Could not extract area from description");
+            logDebug(debugLog, "Could not extract area from description");
         }
     }
 
@@ -517,14 +521,14 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
 
     // Get description - prefer longer descriptions
     let description = data.descripcion || data.description || title || "Luxury property in Panama";
-    logDebug(`Initial description length: ${description.length}`);
+    logDebug(debugLog, `Initial description length: ${description.length}`);
 
     // If description is too short, try to combine with other text
     if (description.length < 100 && data.detalles && Array.isArray(data.detalles)) {
         const detailsText = data.detalles.join('. ');
         if (detailsText.length > description.length) {
             description = detailsText;
-            logDebug(`Replaced short description with details text (${description.length} chars)`);
+            logDebug(debugLog, `Replaced short description with details text (${description.length} chars)`);
         }
     }
 
@@ -537,7 +541,7 @@ function mapStructuredDataToPropertyData(data: any, url: string): PropertyData |
         description: description.length + " chars",
         features: allFeatures.length + " items"
     });
-    logDebug("Mapped data successfully");
+    logDebug(debugLog, "Mapped data successfully");
 
     return {
         title: cleanText(title || "Property Listing"),
@@ -794,10 +798,9 @@ export const handler: Handler = async (event: HandlerEvent) => {
                 logDebug(debugLogArray, "Mapping structured data failed (or rejected), falling back to HTML");
 
                 // FALLBACK: If structured extraction fails, fall back to HTML scraping
-                console.log("Falling back to HTML scraping...");
                 if (fcData.data.html) {
                     const $ = cheerio.load(fcData.data.html);
-                    propertyData = extractWithMultipleStrategies($, url, fcData.data.html);
+                    propertyData = extractWithMultipleStrategies($, url, fcData.data.html, debugLogArray);
                     logDebug(debugLogArray, "Fallback HTML extraction completed");
                 } else {
                     throw new Error("Failed to map structured data to PropertyData and no HTML available for fallback");
@@ -873,7 +876,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
             const $ = cheerio.load(html);
 
             // ULTRA AGGRESSIVE MULTI-STRATEGY EXTRACTION
-            propertyData = extractWithMultipleStrategies($, url, html);
+            propertyData = extractWithMultipleStrategies($, url, html, debugLogArray);
 
             // EXTRA CLEANING: If FireCrawl provided markdown, use it to pick a cleaner description
             if (fcData.data.markdown && (!propertyData.description || propertyData.description.length < 100)) {
@@ -996,7 +999,8 @@ function findInText($: ReturnType<typeof cheerio.load>, keywords: string[], minL
     return "";
 }
 
-function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: string, html: string): PropertyData {
+function extractWithMultipleStrategies($: ReturnType<typeof cheerio.load>, url: string, html: string, debugLog: string[]): PropertyData {
+    logDebug(debugLog, "Starting multi-strategy extraction");
 
     // ========== SPECIFIC STRATEGY: ENCUENTRA24 ==========
     if (url.includes("encuentra24.com")) {
