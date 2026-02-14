@@ -63,7 +63,7 @@ export async function generatePropertyVideo(
 
     // 2. Prepare Assets
     const allImages = [...customImages, ...data.images];
-    const imagesToUse = allImages.slice(0, 8);
+    const imagesToUse = [...new Set(allImages)]; // Use all images, deduplicated
 
     // Load images
     const loadedImages: HTMLImageElement[] = [];

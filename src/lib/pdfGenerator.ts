@@ -262,13 +262,23 @@ export async function generatePropertyPDF(
         doc.text("...", margin, y + (maxLines * 5));
     }
 
-    // ========== SLIDE 3: GALLERY ==========
-    // Combine custom and scraped images
+    // ========== GALLERY SLIDES (4 images per page) ==========
+    // Combine custom and scraped images — include ALL of them
     const allImages = [...customImages, ...data.images];
-    // Avoid re-using hero if it was index 0, but okay for gallery usually
-    // Let's take up to 4 nicely laid out images
+    // Deduplicate
+    const uniqueGalleryImages = [...new Set(allImages)];
 
-    if (allImages.length > 0) {
+    // Load all images upfront
+    const allLoadedImages = await Promise.all(uniqueGalleryImages.map(url => loadImageAsDataURL(url)));
+    const allValidImages = allLoadedImages.filter(Boolean) as string[];
+
+    // Create gallery pages in batches of 4
+    const IMAGES_PER_PAGE = 4;
+    for (let pageStart = 0; pageStart < allValidImages.length; pageStart += IMAGES_PER_PAGE) {
+        const pageImages = allValidImages.slice(pageStart, pageStart + IMAGES_PER_PAGE);
+        const pageNum = Math.floor(pageStart / IMAGES_PER_PAGE) + 1;
+        const totalPages = Math.ceil(allValidImages.length / IMAGES_PER_PAGE);
+
         doc.addPage();
         drawBackground();
 
@@ -278,39 +288,37 @@ export async function generatePropertyPDF(
         doc.setFontSize(22);
         doc.setTextColor(255, 255, 255);
         doc.setFont("helvetica", "bold");
-        doc.text("PROPERTY GALLERY", margin, 20);
+        const galleryTitle = totalPages > 1
+            ? `PROPERTY GALLERY (${pageNum}/${totalPages})`
+            : "PROPERTY GALLERY";
+        doc.text(galleryTitle, margin, 20);
 
         // Mosaic Layout
         const galleryY = 45;
-        const galleryH = H - 70; // Available height
+        const galleryH = H - 70;
         const gap = 5;
 
-        // We try to fit 3-4 images
-        const galleryImages = allImages.slice(0, 4);
-
-        // Load all first
-        const loadedImages = await Promise.all(galleryImages.map(url => loadImageAsDataURL(url)));
-        const validImages = loadedImages.filter(Boolean) as string[];
-
-        // Dynamic layout based on count
-        if (validImages.length === 1) {
-            doc.addImage(validImages[0], "JPEG", margin, galleryY, W - margin * 2, galleryH * 0.8, undefined, "FAST");
-        } else if (validImages.length === 2) {
-            // Side by side
+        if (pageImages.length === 1) {
+            doc.addImage(pageImages[0], "JPEG", margin, galleryY, W - margin * 2, galleryH * 0.8, undefined, "FAST");
+        } else if (pageImages.length === 2) {
             const w = (W - margin * 2 - gap) / 2;
-            doc.addImage(validImages[0], "JPEG", margin, galleryY, w, galleryH * 0.6, undefined, "FAST");
-            doc.addImage(validImages[1], "JPEG", margin + w + gap, galleryY, w, galleryH * 0.6, undefined, "FAST");
-        } else if (validImages.length >= 3) {
-            // 1 Big, 2 Small on right
+            doc.addImage(pageImages[0], "JPEG", margin, galleryY, w, galleryH * 0.6, undefined, "FAST");
+            doc.addImage(pageImages[1], "JPEG", margin + w + gap, galleryY, w, galleryH * 0.6, undefined, "FAST");
+        } else if (pageImages.length === 3) {
             const mainW = (W - margin * 2) * 0.6;
             const sideW = (W - margin * 2) * 0.4 - gap;
             const sideH = (galleryH * 0.6 - gap) / 2;
-
-            doc.addImage(validImages[0], "JPEG", margin, galleryY, mainW, galleryH * 0.6, undefined, "FAST");
-            doc.addImage(validImages[1], "JPEG", margin + mainW + gap, galleryY, sideW, sideH, undefined, "FAST");
-            if (validImages[2]) {
-                doc.addImage(validImages[2], "JPEG", margin + mainW + gap, galleryY + sideH + gap, sideW, sideH, undefined, "FAST");
-            }
+            doc.addImage(pageImages[0], "JPEG", margin, galleryY, mainW, galleryH * 0.6, undefined, "FAST");
+            doc.addImage(pageImages[1], "JPEG", margin + mainW + gap, galleryY, sideW, sideH, undefined, "FAST");
+            doc.addImage(pageImages[2], "JPEG", margin + mainW + gap, galleryY + sideH + gap, sideW, sideH, undefined, "FAST");
+        } else if (pageImages.length >= 4) {
+            // 2x2 grid
+            const cellW = (W - margin * 2 - gap) / 2;
+            const cellH = (galleryH * 0.8 - gap) / 2;
+            doc.addImage(pageImages[0], "JPEG", margin, galleryY, cellW, cellH, undefined, "FAST");
+            doc.addImage(pageImages[1], "JPEG", margin + cellW + gap, galleryY, cellW, cellH, undefined, "FAST");
+            doc.addImage(pageImages[2], "JPEG", margin, galleryY + cellH + gap, cellW, cellH, undefined, "FAST");
+            doc.addImage(pageImages[3], "JPEG", margin + cellW + gap, galleryY + cellH + gap, cellW, cellH, undefined, "FAST");
         }
     }
 

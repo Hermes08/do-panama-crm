@@ -525,8 +525,8 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
 
                     <div>
                         <p className="text-white/50 mb-2">{t.images} ({propertyData.images.length})</p>
-                        <div className="grid grid-cols-4 gap-2">
-                            {propertyData.images.slice(0, 4).map((img, i) => (
+                        <div className="grid grid-cols-4 gap-2 max-h-60 overflow-y-auto">
+                            {propertyData.images.map((img, i) => (
                                 <img key={i} src={img} alt={`Property ${i + 1}`} className="w-full h-20 object-cover rounded-lg" />
                             ))}
                         </div>
