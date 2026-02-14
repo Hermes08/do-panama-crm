@@ -138,7 +138,7 @@ const Handler: BackgroundHandler = async (event) => {
         if (!('error' in agentOutcome) && 'result' in agentOutcome && agentOutcome.result && (agentOutcome.result as any).success) {
             // SUCCESS: Agent worked
             // @ts-ignore
-            const extracted = agentOutcome.result.data;
+            const extracted = agentOutcome.result.data as any;
             logDebug("Agent extraction successful!");
             finalData = { ...finalData, ...extracted };
         } else {
