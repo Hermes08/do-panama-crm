@@ -100,10 +100,10 @@ const Handler: BackgroundHandler = async (event) => {
 
         // B. Agent Extraction Promise
         const jsonSchema = zodToJsonSchema(propertySchema, "propertySchema");
-        const agentPromise = app.scrape(url, {
-            formats: ["json"],
-            jsonOptions: { schema: jsonSchema },
-            timeout: AGENT_TIMEOUT,
+        const agentPromise = app.extract({
+            urls: [url],
+            schema: jsonSchema,
+            prompt: "Extract detailed property information from this real estate listing.",
         }).then(result => ({ type: 'agent', result })).catch(err => ({ type: 'agent', error: err }));
 
         // Wait for HTML Scrape first (it's usually faster and we NEED it for images)
@@ -138,7 +138,7 @@ const Handler: BackgroundHandler = async (event) => {
         if (!('error' in agentOutcome) && 'result' in agentOutcome && agentOutcome.result && (agentOutcome.result as any).success) {
             // SUCCESS: Agent worked
             // @ts-ignore
-            const extracted = agentOutcome.result.json || agentOutcome.result.data?.json;
+            const extracted = agentOutcome.result.data;
             logDebug("Agent extraction successful!");
             finalData = { ...finalData, ...extracted };
         } else {
