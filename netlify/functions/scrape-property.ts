@@ -489,8 +489,8 @@ export const handler: Handler = async (event: HandlerEvent) => {
             logDebug(debugLogArray, "Agent extraction successful");
 
             // Extract Images via fallback scrape (Agent doesn't return images reliably)
-            const scrapeResult = await app.scrapeUrl(url, { formats: ['html'] });
-            if (scrapeResult.success && scrapeResult.html) {
+            const scrapeResult = await app.scrape(url, { formats: ['html'] });
+            if (scrapeResult.html) {
                 const $ = cheerio.load(scrapeResult.html);
                 // Reuse image extraction logic (simplification of previous function)
                 const imgs: string[] = [];
