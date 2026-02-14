@@ -19,7 +19,7 @@ const WIDTH = 1280;
 const HEIGHT = 720;
 const TITLE_DURATION = 4000;
 const STATS_DURATION = 4000;
-const IMAGE_DURATION = 5000; // ms per image slide (increased from 4s to 5s)
+const IMAGE_DURATION = 8000; // ms per image slide (8s to ensure images are fully visible)
 
 // Helper to get proxied URL for external images
 function getProxiedUrl(url: string): string {
@@ -253,8 +253,8 @@ export async function generatePropertyVideo(
 
                 // Fade effect
                 let alpha = 1;
-                if (slideProgress < 0.1) alpha = slideProgress * 10;
-                if (slideProgress > 0.9) alpha = (1 - slideProgress) * 10;
+                if (slideProgress < 0.05) alpha = slideProgress * 20;
+                if (slideProgress > 0.95) alpha = (1 - slideProgress) * 20;
                 ctx.globalAlpha = alpha;
 
                 // Transform from center
