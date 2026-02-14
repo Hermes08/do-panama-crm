@@ -1,4 +1,7 @@
-import jsPDF from "jspdf";
+/**
+ * Premium PDF Generator using html2pdf.js
+ * Creates a beautiful, modern property presentation PDF from HTML/CSS.
+ */
 
 interface PropertyData {
     title: string;
@@ -16,7 +19,6 @@ interface PropertyData {
 // Helper to get proxied URL for external images
 function getProxiedUrl(url: string): string {
     if (!url || url.startsWith('data:') || url.startsWith('blob:')) return url;
-    // If it's an external URL, route through our proxy
     try {
         const parsed = new URL(url);
         if (parsed.origin !== window.location.origin) {
@@ -26,330 +28,249 @@ function getProxiedUrl(url: string): string {
     return url;
 }
 
-// Helper to load image with fallback
-async function loadImageAsDataURL(url: string): Promise<string | null> {
-    return new Promise((resolve) => {
-        const img = new Image();
-        const proxiedUrl = getProxiedUrl(url);
-        // Only set crossOrigin if using proxy (same origin) or data URL
-        if (proxiedUrl !== url || url.startsWith('data:')) {
-            img.crossOrigin = "Anonymous";
-        }
+// Convert image URL to base64 data URL via proxy (for PDF embedding)
+async function toBase64(url: string): Promise<string | null> {
+    try {
+        const proxied = getProxiedUrl(url);
+        const res = await fetch(proxied);
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+        });
+    } catch {
+        return null;
+    }
+}
 
-        img.onload = () => {
-            try {
-                const canvas = document.createElement("canvas");
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext("2d");
-                if (!ctx) {
-                    resolve(null);
-                    return;
-                }
-                ctx.drawImage(img, 0, 0);
-                // Usage of JPEG is generally safer for PDF size
-                resolve(canvas.toDataURL("image/jpeg", 0.8));
-            } catch (e) {
-                console.error("Canvas export failed (likely CORS):", e);
-                resolve(null);
-            }
-        };
+function buildCoverPage(data: PropertyData, heroImage: string | null): string {
+    return `
+    <div class="page cover-page" style="position:relative; overflow:hidden;">
+        ${heroImage ? `
+        <div style="position:absolute; inset:0;">
+            <img src="${heroImage}" style="width:100%; height:100%; object-fit:cover; filter:brightness(0.45);" />
+        </div>
+        ` : `
+        <div style="position:absolute; inset:0; background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);"></div>
+        `}
+        <div style="position:relative; z-index:1; height:100%; display:flex; flex-direction:column; justify-content:flex-end; padding: 60px 50px;">
+            <div style="border-left: 4px solid #38bdf8; padding-left: 20px; margin-bottom: 20px;">
+                <p style="font-family: 'Segoe UI', sans-serif; font-size: 13px; letter-spacing: 4px; color: #38bdf8; margin: 0 0 12px 0; text-transform: uppercase;">Exclusive Listing</p>
+                <h1 style="font-family: 'Georgia', serif; font-size: 36px; color: #fff; margin: 0 0 16px 0; line-height: 1.2; font-weight: 400;">${data.title}</h1>
+                <p style="font-family: 'Segoe UI', sans-serif; font-size: 14px; color: rgba(255,255,255,0.7); margin: 0;">
+                    <span style="display:inline-block; margin-right: 6px;">📍</span>${data.location}
+                </p>
+            </div>
+            <div style="margin-top: 24px; display: flex; align-items: center; gap: 30px;">
+                <div style="background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.3); border-radius: 10px; padding: 16px 28px;">
+                    <p style="font-family: 'Segoe UI', sans-serif; font-size: 11px; color: #38bdf8; margin: 0 0 4px 0; letter-spacing: 2px; text-transform: uppercase;">Asking Price</p>
+                    <p style="font-family: 'Georgia', serif; font-size: 32px; color: #fff; margin: 0; font-weight: 700;">${data.price}</p>
+                </div>
+                ${data.bedrooms || data.bathrooms || data.area ? `
+                <div style="display: flex; gap: 24px;">
+                    ${data.bedrooms ? `<div style="text-align:center;"><p style="font-size:24px; color:#fff; margin:0; font-weight:600;">${data.bedrooms}</p><p style="font-size:11px; color:rgba(255,255,255,0.6); margin:4px 0 0; text-transform:uppercase; letter-spacing:1px;">Beds</p></div>` : ''}
+                    ${data.bathrooms ? `<div style="text-align:center;"><p style="font-size:24px; color:#fff; margin:0; font-weight:600;">${data.bathrooms}</p><p style="font-size:11px; color:rgba(255,255,255,0.6); margin:4px 0 0; text-transform:uppercase; letter-spacing:1px;">Baths</p></div>` : ''}
+                    ${data.area ? `<div style="text-align:center;"><p style="font-size:24px; color:#fff; margin:0; font-weight:600;">${data.area}</p><p style="font-size:11px; color:rgba(255,255,255,0.6); margin:4px 0 0; text-transform:uppercase; letter-spacing:1px;">Area</p></div>` : ''}
+                </div>
+                ` : ''}
+            </div>
+        </div>
+        <div style="position:absolute; bottom:0; left:0; right:0; height:4px; background: linear-gradient(90deg, #38bdf8, #a78bfa, #f472b6);"></div>
+    </div>`;
+}
 
-        img.onerror = () => {
-            console.error(`Failed to load image: ${url}`);
-            resolve(null);
-        };
+function buildDetailsPage(data: PropertyData): string {
+    const specs = [
+        data.bedrooms ? { icon: '🛏️', label: 'Bedrooms', value: data.bedrooms } : null,
+        data.bathrooms ? { icon: '🚿', label: 'Bathrooms', value: data.bathrooms } : null,
+        data.area ? { icon: '📐', label: 'Living Area', value: data.area } : null,
+        { icon: '📍', label: 'Location', value: data.location.split(',')[0] || data.location },
+    ].filter(Boolean) as { icon: string; label: string; value: string }[];
 
-        // Trigger load via proxy
-        img.src = proxiedUrl;
-    });
+    return `
+    <div class="page details-page" style="background: #fff; padding: 50px;">
+        <div style="border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 30px;">
+            <p style="font-size: 11px; letter-spacing: 3px; color: #64748b; text-transform: uppercase; margin: 0 0 4px 0;">Property Details</p>
+            <h2 style="font-family: 'Georgia', serif; font-size: 28px; color: #0f172a; margin: 0; font-weight: 400;">${data.title}</h2>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(${Math.min(specs.length, 4)}, 1fr); gap: 16px; margin-bottom: 32px;">
+            ${specs.map(s => `
+            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #e2e8f0;">
+                <p style="font-size: 28px; margin: 0 0 4px 0;">${s.icon}</p>
+                <p style="font-family: 'Georgia', serif; font-size: 22px; color: #0f172a; margin: 0 0 4px 0; font-weight: 600;">${s.value}</p>
+                <p style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin: 0;">${s.label}</p>
+            </div>
+            `).join('')}
+        </div>
+
+        <div style="margin-bottom: 32px;">
+            <p style="font-size: 11px; letter-spacing: 2px; color: #38bdf8; text-transform: uppercase; margin: 0 0 12px 0; font-weight: 600;">Description</p>
+            <p style="font-size: 13px; color: #334155; line-height: 1.8; margin: 0;">${data.description}</p>
+        </div>
+
+        ${data.features.length > 0 ? `
+        <div>
+            <p style="font-size: 11px; letter-spacing: 2px; color: #38bdf8; text-transform: uppercase; margin: 0 0 14px 0; font-weight: 600;">Amenities & Features</p>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                ${data.features.map(f => `
+                <span style="display: inline-block; padding: 6px 14px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 20px; font-size: 11px; color: #0369a1;">✓ ${f}</span>
+                `).join('')}
+            </div>
+        </div>
+        ` : ''}
+
+        <div style="position:absolute; bottom:0; left:0; right:0; height:4px; background: linear-gradient(90deg, #38bdf8, #a78bfa, #f472b6);"></div>
+    </div>`;
+}
+
+function buildGalleryPage(images: string[], pageNum: number, totalPages: number): string {
+    const count = images.length;
+    let grid = '';
+
+    if (count === 1) {
+        grid = `<img src="${images[0]}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />`;
+    } else if (count === 2) {
+        grid = `
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; height:100%;">
+            <img src="${images[0]}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />
+            <img src="${images[1]}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />
+        </div>`;
+    } else if (count === 3) {
+        grid = `
+        <div style="display:grid; grid-template-columns:1.3fr 0.7fr; grid-template-rows:1fr 1fr; gap:8px; height:100%;">
+            <img src="${images[0]}" style="width:100%; height:100%; object-fit:cover; border-radius:8px; grid-row:1/3;" />
+            <img src="${images[1]}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />
+            <img src="${images[2]}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />
+        </div>`;
+    } else {
+        // 4 images — 2x2 grid
+        grid = `
+        <div style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:8px; height:100%;">
+            ${images.map(src => `<img src="${src}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />`).join('')}
+        </div>`;
+    }
+
+    const label = totalPages > 1 ? `Gallery (${pageNum}/${totalPages})` : 'Gallery';
+
+    return `
+    <div class="page gallery-page" style="background: #0f172a; padding: 40px 50px;">
+        <div style="margin-bottom: 20px;">
+            <p style="font-size: 11px; letter-spacing: 3px; color: #38bdf8; text-transform: uppercase; margin: 0 0 4px 0;">${label}</p>
+            <div style="width: 40px; height: 2px; background: #38bdf8;"></div>
+        </div>
+        <div style="height: calc(100% - 60px);">
+            ${grid}
+        </div>
+        <div style="position:absolute; bottom:0; left:0; right:0; height:4px; background: linear-gradient(90deg, #38bdf8, #a78bfa, #f472b6);"></div>
+    </div>`;
+}
+
+function buildFooterPage(data: PropertyData): string {
+    return `
+    <div class="page footer-page" style="background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding: 60px;">
+        <div style="margin-bottom: 40px;">
+            <p style="font-size: 11px; letter-spacing: 4px; color: #38bdf8; text-transform: uppercase; margin: 0 0 16px 0;">Thank You For Your Interest</p>
+            <h2 style="font-family: 'Georgia', serif; font-size: 32px; color: #fff; margin: 0 0 8px 0; font-weight: 400;">${data.title}</h2>
+            <p style="font-size: 28px; color: #38bdf8; margin: 0; font-weight: 600;">${data.price}</p>
+        </div>
+        <div style="border-top: 1px solid rgba(255,255,255,0.15); padding-top: 30px; width: 300px;">
+            <p style="font-size: 13px; color: rgba(255,255,255,0.5); margin: 0 0 4px 0;">Presented by</p>
+            <p style="font-size: 18px; color: #fff; margin: 0; font-weight: 600;">DO Panama Real Estate</p>
+            <p style="font-size: 12px; color: rgba(255,255,255,0.4); margin: 8px 0 0 0;">Premium Property Solutions</p>
+        </div>
+        <div style="position:absolute; bottom:0; left:0; right:0; height:4px; background: linear-gradient(90deg, #38bdf8, #a78bfa, #f472b6);"></div>
+    </div>`;
 }
 
 export async function generatePropertyPDF(
     propertyData: PropertyData,
     customImages: string[]
 ): Promise<Blob> {
-    const doc = new jsPDF("landscape"); // PowerPoint style landscape
-    const W = doc.internal.pageSize.getWidth();
-    const H = doc.internal.pageSize.getHeight();
-    const margin = 20;
+    // Dynamically import html2pdf (client-side only)
+    const html2pdf = (await import('html2pdf.js')).default;
 
-    // NEW Color palette (Professional Sky/Slate/Gold)
-    const colors = {
-        primary: [15, 23, 42],       // Slate 900 (Dark background/text)
-        secondary: [56, 189, 248],   // Sky 400 (Accents/Highlights)
-        accent: [234, 179, 8],       // Yellow 500 (Gold/Luxury touches)
-        bgLight: [241, 245, 249],    // Slate 100 (Light backgrounds)
-        textDark: [51, 65, 85],      // Slate 700
-        textLight: [148, 163, 184],  // Slate 400
-        white: [255, 255, 255]
-    };
+    // Prepare images — deduplicate, load as base64 for reliable PDF embedding
+    const allImageUrls = [...new Set([...customImages, ...propertyData.images])];
 
-    // Helper to sanitize text for jsPDF (removes emojis, replaces common special chars)
-    const clean = (str: string | undefined) => {
-        if (!str) return "";
-        return str
-            .replace(/[^\x00-\x7F]/g, (char) => {
-                // Map common chars
-                const map: Record<string, string> = {
-                    'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-                    'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
-                    'ñ': 'n', 'Ñ': 'N', '²': '2', '³': '3', '°': 'deg',
-                    '–': '-', '—': '-', '“': '"', '”': '"', '‘': "'", '’': "'"
-                };
-                return map[char] || ""; // Remove unknown
-            })
-            .trim();
-    };
+    // Load images in parallel (max 20 to avoid overwhelming)
+    const imagePromises = allImageUrls.slice(0, 20).map(url => toBase64(url));
+    const base64Images = (await Promise.all(imagePromises)).filter(Boolean) as string[];
 
-    // Sanitize Data
-    const data = {
-        ...propertyData,
-        title: clean(propertyData.title),
-        price: clean(propertyData.price),
-        location: clean(propertyData.location),
-        description: clean(propertyData.description),
-        bedrooms: clean(propertyData.bedrooms),
-        bathrooms: clean(propertyData.bathrooms),
-        area: clean(propertyData.area),
-        features: propertyData.features.map(clean)
-    };
+    // Hero image = first one
+    const heroImage = base64Images[0] || null;
 
-    // Helper for background
-    const drawBackground = () => {
-        doc.setFillColor(colors.bgLight[0], colors.bgLight[1], colors.bgLight[2]);
-        doc.rect(0, 0, W, H, "F");
-
-        // Subtle design element - bottom bar
-        doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-        doc.rect(0, H - 15, W, 15, "F");
-    };
-
-    // ========== SLIDE 1: TITLE SLIDE ==========
-    drawBackground();
-
-    // Hero image logic - prefer custom images, then property images
-    const heroImage = customImages[0] || propertyData.images[0];
-
-    if (heroImage) {
-        const imgData = await loadImageAsDataURL(heroImage);
-        if (imgData) {
-            // Full width top image
-            doc.addImage(imgData, "JPEG", 0, 0, W, H * 0.6, undefined, "FAST");
-
-            // Gradient-like overlay for text readability check
-            // (Simulated with semi-transparent rect if supported, else solid bar below)
-            // jsPDF transparency is tricky without plugins, so we use a design box overlapping
-        }
-    }
-
-    // Title Card (Floating)
-    const cardW = W * 0.8;
-    const cardH = 80;
-    const cardX = (W - cardW) / 2;
-    const cardY = H * 0.45;
-
-    doc.setFillColor(255, 255, 255);
-    doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, "F");
-
-    // Border
-    doc.setDrawColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-    doc.setLineWidth(1);
-    doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, "S");
-
-
-
-    // Text Content
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-    doc.setFontSize(26);
-
-    const titleLines = doc.splitTextToSize(data.title.toUpperCase(), cardW - 20);
-    doc.text(titleLines[0], W / 2, cardY + 25, { align: "center" });
-
-    // Price
-    doc.setFontSize(32);
-    doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-    doc.text(data.price, W / 2, cardY + 45, { align: "center" });
-
-    // Location
-    doc.setFontSize(14);
-    doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
-    doc.setFont("helvetica", "normal");
-    doc.text(data.location, W / 2, cardY + 60, { align: "center" });
-
-    // Footer Info
-    doc.setFontSize(10);
-    doc.setTextColor(255, 255, 255);
-    doc.text("PREPARED FOR YOU", margin, H - 5);
-    doc.text("DO PANAMA REAL ESTATE", W - margin, H - 5, { align: "right" });
-
-
-    // ========== SLIDE 2: DETAILS & SPECS ==========
-    doc.addPage();
-    drawBackground();
-
-    // Header strip
-    doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-    doc.rect(0, 0, W, 30, "F");
-
-    doc.setFontSize(22);
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.text("PROPERTY SPECIFICATIONS", margin, 20);
-
-    let y = 50;
-
-    // Icon Grid
-    const specIcons = [
-        { label: "BEDROOMS", val: data.bedrooms, icon: "Beds" },
-        { label: "BATHROOMS", val: data.bathrooms, icon: "Baths" },
-        { label: "LIVING AREA", val: data.area, icon: "Area" },
-        { label: "LOCATION", val: data.location.split(",")[0], icon: "Loc" } // Short loc
-    ].filter(i => i.val); // Only show existing data
-
-    const cols = 2; // 2x2 grid for specs
-    const colW = (W - margin * 3) / cols;
-
-    specIcons.forEach((spec, i) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const boxX = margin + col * (colW + margin);
-        const boxY = y + row * 45;
-        const boxH = 35;
-
-        // Card bg
-        doc.setFillColor(255, 255, 255);
-        doc.roundedRect(boxX, boxY, colW, boxH, 2, 2, "F");
-
-        // Icon
-        doc.setFontSize(18);
-        doc.text(spec.icon, boxX + 10, boxY + 22);
-
-        // Value
-        doc.setFontSize(16);
-        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-        doc.setFont("helvetica", "bold");
-        doc.text(spec.val || "-", boxX + 30, boxY + 15);
-
-        // Label
-        doc.setFontSize(9);
-        doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
-        doc.setFont("helvetica", "normal");
-        doc.text(spec.label, boxX + 30, boxY + 28);
-    });
-
-    y += 100; // Move down below specs
-
-    // Description Section
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-    doc.text("DESCRIPTION", margin, y);
-
-    y += 10;
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
-
-    const descText = doc.splitTextToSize(data.description, W - margin * 2);
-    // Limit lines to fit page
-    const maxLines = 12;
-    doc.text(descText.slice(0, maxLines), margin, y);
-
-    if (descText.length > maxLines) {
-        doc.text("...", margin, y + (maxLines * 5));
-    }
-
-    // ========== GALLERY SLIDES (4 images per page) ==========
-    // Combine custom and scraped images — include ALL of them
-    const allImages = [...customImages, ...data.images];
-    // Deduplicate
-    const uniqueGalleryImages = [...new Set(allImages)];
-
-    // Load all images upfront
-    const allLoadedImages = await Promise.all(uniqueGalleryImages.map(url => loadImageAsDataURL(url)));
-    const allValidImages = allLoadedImages.filter(Boolean) as string[];
-
-    // Create gallery pages in batches of 4
+    // Build gallery pages (4 images per page)
     const IMAGES_PER_PAGE = 4;
-    for (let pageStart = 0; pageStart < allValidImages.length; pageStart += IMAGES_PER_PAGE) {
-        const pageImages = allValidImages.slice(pageStart, pageStart + IMAGES_PER_PAGE);
-        const pageNum = Math.floor(pageStart / IMAGES_PER_PAGE) + 1;
-        const totalPages = Math.ceil(allValidImages.length / IMAGES_PER_PAGE);
+    const galleryPages: string[] = [];
+    const totalGalleryPages = Math.ceil(base64Images.length / IMAGES_PER_PAGE);
 
-        doc.addPage();
-        drawBackground();
-
-        // Header
-        doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-        doc.rect(0, 0, W, 30, "F");
-        doc.setFontSize(22);
-        doc.setTextColor(255, 255, 255);
-        doc.setFont("helvetica", "bold");
-        const galleryTitle = totalPages > 1
-            ? `PROPERTY GALLERY (${pageNum}/${totalPages})`
-            : "PROPERTY GALLERY";
-        doc.text(galleryTitle, margin, 20);
-
-        // Mosaic Layout
-        const galleryY = 45;
-        const galleryH = H - 70;
-        const gap = 5;
-
-        if (pageImages.length === 1) {
-            doc.addImage(pageImages[0], "JPEG", margin, galleryY, W - margin * 2, galleryH * 0.8, undefined, "FAST");
-        } else if (pageImages.length === 2) {
-            const w = (W - margin * 2 - gap) / 2;
-            doc.addImage(pageImages[0], "JPEG", margin, galleryY, w, galleryH * 0.6, undefined, "FAST");
-            doc.addImage(pageImages[1], "JPEG", margin + w + gap, galleryY, w, galleryH * 0.6, undefined, "FAST");
-        } else if (pageImages.length === 3) {
-            const mainW = (W - margin * 2) * 0.6;
-            const sideW = (W - margin * 2) * 0.4 - gap;
-            const sideH = (galleryH * 0.6 - gap) / 2;
-            doc.addImage(pageImages[0], "JPEG", margin, galleryY, mainW, galleryH * 0.6, undefined, "FAST");
-            doc.addImage(pageImages[1], "JPEG", margin + mainW + gap, galleryY, sideW, sideH, undefined, "FAST");
-            doc.addImage(pageImages[2], "JPEG", margin + mainW + gap, galleryY + sideH + gap, sideW, sideH, undefined, "FAST");
-        } else if (pageImages.length >= 4) {
-            // 2x2 grid
-            const cellW = (W - margin * 2 - gap) / 2;
-            const cellH = (galleryH * 0.8 - gap) / 2;
-            doc.addImage(pageImages[0], "JPEG", margin, galleryY, cellW, cellH, undefined, "FAST");
-            doc.addImage(pageImages[1], "JPEG", margin + cellW + gap, galleryY, cellW, cellH, undefined, "FAST");
-            doc.addImage(pageImages[2], "JPEG", margin, galleryY + cellH + gap, cellW, cellH, undefined, "FAST");
-            doc.addImage(pageImages[3], "JPEG", margin + cellW + gap, galleryY + cellH + gap, cellW, cellH, undefined, "FAST");
-        }
+    for (let i = 0; i < base64Images.length; i += IMAGES_PER_PAGE) {
+        const batch = base64Images.slice(i, i + IMAGES_PER_PAGE);
+        const pageNum = Math.floor(i / IMAGES_PER_PAGE) + 1;
+        galleryPages.push(buildGalleryPage(batch, pageNum, totalGalleryPages));
     }
 
-    // ========== SLIDE 4: FEATURES LIST ==========
-    if (data.features.length > 0) {
-        doc.addPage();
-        drawBackground();
+    // Assemble full HTML document
+    const html = `
+    <div id="pdf-root" style="font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: #0f172a;">
+        <style>
+            .page {
+                width: 297mm;
+                min-height: 210mm;
+                height: 210mm;
+                position: relative;
+                overflow: hidden;
+                box-sizing: border-box;
+                page-break-after: always;
+            }
+            .page:last-child {
+                page-break-after: auto;
+            }
+            * { box-sizing: border-box; }
+        </style>
 
-        doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-        doc.rect(0, 0, W, 30, "F");
-        doc.setFontSize(22);
-        doc.setTextColor(255, 255, 255);
-        doc.text("AMENITIES & FEATURES", margin, 20);
+        ${buildCoverPage(propertyData, heroImage)}
+        ${buildDetailsPage(propertyData)}
+        ${galleryPages.join('\n')}
+        ${buildFooterPage(propertyData)}
+    </div>`;
 
-        let y = 50;
-        const colCount = 3;
-        const colWidth = (W - margin * 2) / colCount;
+    // Create a temporary container
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    container.style.position = 'fixed';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    document.body.appendChild(container);
 
-        doc.setFontSize(11);
-        doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
+    try {
+        const pdfBlob: Blob = await html2pdf()
+            .set({
+                margin: 0,
+                filename: 'property_presentation.pdf',
+                image: { type: 'jpeg', quality: 0.92 },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true,
+                    logging: false,
+                },
+                jsPDF: {
+                    unit: 'mm',
+                    format: 'a4',
+                    orientation: 'landscape',
+                },
+                pagebreak: { mode: ['css', 'legacy'], after: '.page' },
+            })
+            .from(container.querySelector('#pdf-root'))
+            .outputPdf('blob');
 
-        data.features.forEach((feat, i) => {
-            const col = i % colCount;
-            const row = Math.floor(i / colCount);
-
-            // Check page overflow
-            if (y + row * 10 > H - 30) return;
-
-            doc.text("- " + feat, margin + col * colWidth, y + row * 12);
-        });
+        return pdfBlob;
+    } finally {
+        document.body.removeChild(container);
     }
-
-    return doc.output("blob");
 }

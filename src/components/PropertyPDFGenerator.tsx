@@ -508,8 +508,13 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                     </div>
 
                     <div>
-                        <p className="text-white/50 mb-2">{t.description}</p>
-                        <p className="text-white/80 text-sm line-clamp-3">{propertyData.description}</p>
+                        <p className="text-white/50 mb-2">{t.description} <span className="text-xs text-white/30">(editable)</span></p>
+                        <textarea
+                            className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white/80 text-sm resize-y min-h-[80px] focus:outline-none focus:border-gleec-cyan/50 transition-colors"
+                            value={propertyData.description}
+                            onChange={(e) => setPropertyData(prev => prev ? { ...prev, description: e.target.value } : prev)}
+                            rows={4}
+                        />
                     </div>
 
                     <div>
