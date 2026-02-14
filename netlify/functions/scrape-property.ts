@@ -2,6 +2,7 @@ import type { Handler, HandlerEvent } from "@netlify/functions";
 import * as cheerio from "cheerio";
 import FirecrawlApp from '@mendable/firecrawl-js';
 import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
 interface PropertyData {
     title: string;
@@ -389,9 +390,10 @@ export const handler: Handler = async (event: HandlerEvent) => {
 
         try {
             if (hostname.includes("encuentra24.com")) {
+                const schema = zodToJsonSchema(Encunetra24Schema, "Encuentra24Schema");
                 const result = await app.agent({
                     prompt: "Extraer datos de la propiedad en la URL proporcionada, incluyendo descripción, amenidades, metraje, precio, cantidad de recámaras o detalles técnicos relevantes. Excluir números de contacto.",
-                    schema: Encunetra24Schema,
+                    schema: schema,
                     urls: [url],
                     model: 'spark-1-mini',
                 });
@@ -412,9 +414,10 @@ export const handler: Handler = async (event: HandlerEvent) => {
                     };
                 }
             } else if (hostname.includes("jamesedition.com")) {
+                const schema = zodToJsonSchema(JamesEditionSchema, "JamesEditionSchema");
                 const result = await app.agent({
                     prompt: "Extraer datos de la propiedad desde la URL de JamesEdition.",
-                    schema: JamesEditionSchema,
+                    schema: schema,
                     urls: [url],
                     model: 'spark-1-mini',
                 });
@@ -434,9 +437,10 @@ export const handler: Handler = async (event: HandlerEvent) => {
                     };
                 }
             } else if (hostname.includes("compreoalquile.com")) {
+                const schema = zodToJsonSchema(CompreoalquileSchema, "CompreoalquileSchema");
                 const result = await app.agent({
                     prompt: "Extraer datos técnicos de la propiedad en Compreoalquile.",
-                    schema: CompreoalquileSchema,
+                    schema: schema,
                     urls: [url],
                     model: 'spark-1-mini',
                 });
@@ -456,9 +460,10 @@ export const handler: Handler = async (event: HandlerEvent) => {
                     };
                 }
             } else if (hostname.includes("mlsacobir.com")) {
+                const schema = zodToJsonSchema(MLSAcobirSchema, "MLSAcobirSchema");
                 const result = await app.agent({
                     prompt: "Extraer datos de la propiedad desde MLS Acobir.",
-                    schema: MLSAcobirSchema,
+                    schema: schema,
                     urls: [url],
                     model: 'spark-1-mini',
                 });
