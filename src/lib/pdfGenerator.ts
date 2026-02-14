@@ -266,7 +266,7 @@ export async function generatePropertyPDF(
                 },
                 pagebreak: { mode: ['css', 'legacy'], after: '.page' },
             })
-            .from(container.querySelector('#pdf-root'))
+            .from(container.querySelector('#pdf-root') as HTMLElement)
             .outputPdf('blob');
 
         return pdfBlob;
