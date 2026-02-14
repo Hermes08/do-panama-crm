@@ -93,14 +93,14 @@ const Handler: BackgroundHandler = async (event) => {
         logDebug("Launching parallel requests: Agent + HTML Scrape");
 
         // A. HTML Scrape Promise
-        const scrapePromise = app.scrapeUrl(url, {
+        const scrapePromise = app.scrape(url, {
             formats: ["html"],
             timeout: SCRAPE_TIMEOUT,
         }).then(result => ({ type: 'scrape', result })).catch(err => ({ type: 'scrape', error: err }));
 
         // B. Agent Extraction Promise
         const jsonSchema = zodToJsonSchema(propertySchema, "propertySchema");
-        const agentPromise = app.scrapeUrl(url, {
+        const agentPromise = app.scrape(url, {
             formats: ["json"],
             jsonOptions: { schema: jsonSchema },
             timeout: AGENT_TIMEOUT,
@@ -110,9 +110,9 @@ const Handler: BackgroundHandler = async (event) => {
         const scrapeOutcome = await scrapePromise;
         let htmlContent: string | undefined;
 
-        if (scrapeOutcome.error) {
+        if ('error' in scrapeOutcome && scrapeOutcome.error) { // Type guard
             logDebug(`HTML Scrape failed: ${scrapeOutcome.error}`);
-        } else if (scrapeOutcome.result && scrapeOutcome.result.success) {
+        } else if ('result' in scrapeOutcome && scrapeOutcome.result && (scrapeOutcome.result as any).success) {
             // @ts-ignore
             htmlContent = scrapeOutcome.result.html || scrapeOutcome.result.data?.html; // Handle different SDK versions
             logDebug("HTML Scrape successful. Content length: " + (htmlContent?.length || 0));
@@ -135,7 +135,7 @@ const Handler: BackgroundHandler = async (event) => {
 
         // --- PROCESS RESULTS ---
 
-        if (!agentOutcome.error && agentOutcome.result && agentOutcome.result.success) {
+        if (!('error' in agentOutcome) && 'result' in agentOutcome && agentOutcome.result && (agentOutcome.result as any).success) {
             // SUCCESS: Agent worked
             // @ts-ignore
             const extracted = agentOutcome.result.json || agentOutcome.result.data?.json;
@@ -143,7 +143,8 @@ const Handler: BackgroundHandler = async (event) => {
             finalData = { ...finalData, ...extracted };
         } else {
             // FAILURE: Agent failed/timed out
-            logDebug(`Agent failed: ${agentOutcome.error}. Falling back to HTML extraction.`);
+            const errorMsg = 'error' in agentOutcome ? agentOutcome.error : 'Unknown error';
+            logDebug(`Agent failed: ${errorMsg}. Falling back to HTML extraction.`);
 
             if (htmlContent) {
                 const fallbackData = extractWithCheerio(htmlContent, url);
