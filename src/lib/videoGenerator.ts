@@ -19,7 +19,7 @@ const WIDTH = 1280;
 const HEIGHT = 720;
 const TITLE_DURATION = 4000;
 const STATS_DURATION = 4000;
-const IMAGE_DURATION = 8000; // ms per image slide (8s to ensure images are fully visible)
+const IMAGE_DURATION = 5000; // ms per image slide (5s is standard)
 
 // Helper to get proxied URL for external images
 function getProxiedUrl(url: string): string {
@@ -253,8 +253,8 @@ export async function generatePropertyVideo(
 
                 // Fade effect
                 let alpha = 1;
-                if (slideProgress < 0.05) alpha = slideProgress * 20;
-                if (slideProgress > 0.95) alpha = (1 - slideProgress) * 20;
+                if (slideProgress < 0.1) alpha = slideProgress * 10;
+                if (slideProgress > 0.9) alpha = (1 - slideProgress) * 10;
                 ctx.globalAlpha = alpha;
 
                 // Transform from center
@@ -292,7 +292,8 @@ export async function generatePropertyVideo(
         // Schedule next frame using setTimeout (not requestAnimationFrame)
         // This ensures consistent rendering even when the tab is in background
         if (currentFrame < totalFrames && recorder.state === "recording") {
-            setTimeout(renderFrame, 0); // Render as fast as possible, virtual time handles timing
+            // Render in real-time (~33ms) so MediaRecorder captures correct duration
+            setTimeout(renderFrame, FRAME_INTERVAL);
         } else if (recorder.state === "recording") {
             recorder.stop();
         }
