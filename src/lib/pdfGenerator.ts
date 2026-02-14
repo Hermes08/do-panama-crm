@@ -184,63 +184,70 @@ export async function generatePropertyPDF(
         galleryPages.push(buildGalleryPage(base64Images[i], i + 1, base64Images.length));
     }
 
-    // Assemble full HTML document
-    const html = `
-    <div id="pdf-root" style="font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: #0f172a;">
+    // Assemble pages as separate HTML elements, render each individually
+    // This avoids html2pdf.js page-break issues (blank pages, cropping)
+    const pages = [
+        buildCoverPage(propertyData, heroImage),
+        buildDetailsPage(propertyData),
+        ...galleryPages.map(g => g),
+        buildFooterPage(propertyData),
+    ];
+
+    const pageStyle = `
         <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
             .page {
                 width: 297mm;
-                min-height: 210mm;
                 height: 210mm;
                 position: relative;
                 overflow: hidden;
-                box-sizing: border-box;
-                page-break-after: always;
             }
-            .page:last-child {
-                page-break-after: auto;
-            }
-            * { box-sizing: border-box; }
-        </style>
+        </style>`;
 
-        ${buildCoverPage(propertyData, heroImage)}
-        ${buildDetailsPage(propertyData)}
-        ${galleryPages.join('\n')}
-        ${buildFooterPage(propertyData)}
-    </div>`;
+    // Use html2canvas + jsPDF to render each page individually
+    const html2canvas = (await import('html2canvas')).default;
+    const { jsPDF } = await import('jspdf');
 
-    // Create a temporary container
-    const container = document.createElement('div');
-    container.innerHTML = html;
-    container.style.position = 'fixed';
-    container.style.left = '-9999px';
-    container.style.top = '0';
-    document.body.appendChild(container);
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = pdf.internal.pageSize.getHeight();
 
-    try {
-        const pdfBlob: Blob = await html2pdf()
-            .set({
-                margin: 0,
-                filename: 'property_presentation.pdf',
-                image: { type: 'jpeg', quality: 0.92 },
-                html2canvas: {
-                    scale: 2,
-                    useCORS: true,
-                    allowTaint: true,
-                    logging: false,
-                },
-                jsPDF: {
-                    unit: 'mm',
-                    format: 'a4',
-                    orientation: 'landscape',
-                },
-                pagebreak: { mode: ['css', 'legacy'], after: '.page' },
-            })
-            .from(container.querySelector('#pdf-root') as HTMLElement)
-            .outputPdf('blob');
+    for (let i = 0; i < pages.length; i++) {
+        // Create temp container for this single page
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = pageStyle + pages[i];
+        wrapper.style.position = 'fixed';
+        wrapper.style.left = '-9999px';
+        wrapper.style.top = '0';
+        wrapper.style.width = '297mm';
+        document.body.appendChild(wrapper);
 
-        return pdfBlob;
-    } finally {
-        document.body.removeChild(container);
+        const pageEl = wrapper.querySelector('.page') as HTMLElement;
+        if (!pageEl) {
+            document.body.removeChild(wrapper);
+            continue;
+        }
+
+        try {
+            const canvas = await html2canvas(pageEl, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                logging: false,
+                width: pageEl.scrollWidth,
+                height: pageEl.scrollHeight,
+            });
+
+            const imgData = canvas.toDataURL('image/jpeg', 0.92);
+
+            if (i > 0) pdf.addPage();
+            pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH);
+        } catch (err) {
+            console.error(`Failed to render page ${i + 1}:`, err);
+        } finally {
+            document.body.removeChild(wrapper);
+        }
     }
+
+    return pdf.output('blob');
 }
