@@ -110,33 +110,87 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
         setVideoBlob(null);
 
         try {
-            const response = await fetch("/.netlify/functions/scrape-property", {
+            // 1. Generate Request ID
+            const requestId = crypto.randomUUID();
+
+            // 2. Create Initial Record in Supabase
+            const { error: dbError } = await supabase
+                .from('scraped_results')
+                .insert({
+                    id: requestId,
+                    url: url,
+                    status: 'pending'
+                });
+
+            if (dbError) throw new Error("Failed to initialize scrape job: " + dbError.message);
+
+            // 3. Trigger Background Function
+            // Note: Background functions return 202 immediately.
+            const response = await fetch("/.netlify/functions/scrape-background", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url }),
+                body: JSON.stringify({ requestId, url }),
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || "Failed to extract property data");
+            if (response.status !== 202) {
+                // Even if it fails, it might return 200/500, but background functions specifically should be 202.
+                // However, let's treat any success-like code as fine for now, but 202 is the standard.
+                // If it's an error, throw.
+                if (!response.ok) {
+                    throw new Error("Failed to start background scrape");
+                }
             }
 
-            const data = await response.json();
-            setPropertyData(data);
+            // 4. Poll for Results
+            let attempts = 0;
+            const maxAttempts = 60; // 2 minutes (assuming 2s interval)
 
-            // AUTO-TRANSLATE: Start translation immediately after extraction
-            setTranslating(true);
-            try {
-                const translated = await translatePropertyData(data);
-                setTranslatedData(translated);
-            } catch (err) {
-                console.error("Auto-translation failed:", err);
-            } finally {
-                setTranslating(false);
-            }
+            const pollInterval = setInterval(async () => {
+                attempts++;
+                try {
+                    const { data: job, error: pollError } = await supabase
+                        .from('scraped_results')
+                        .select('*')
+                        .eq('id', requestId)
+                        .single();
+
+                    if (pollError) {
+                        console.error("Polling error:", pollError);
+                        return;
+                    }
+
+                    if (job.status === 'completed') {
+                        clearInterval(pollInterval);
+                        const resultData = job.data;
+                        setPropertyData(resultData);
+                        setLoading(false);
+
+                        // Auto-translate
+                        setTranslating(true);
+                        try {
+                            const translated = await translatePropertyData(resultData);
+                            setTranslatedData(translated);
+                        } catch (err) {
+                            console.error("Auto-translation failed:", err);
+                        } finally {
+                            setTranslating(false);
+                        }
+                    } else if (job.status === 'failed') {
+                        clearInterval(pollInterval);
+                        setError(job.error || "Scrape job failed");
+                        setLoading(false);
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                        setError("Scrape operation timed out after 2 minutes.");
+                        setLoading(false);
+                    }
+                } catch (e) {
+                    console.error("Polling exception", e);
+                }
+            }, 2000);
+
         } catch (err) {
             setError(err instanceof Error ? err.message : "Unknown error occurred");
-        } finally {
             setLoading(false);
         }
     };
