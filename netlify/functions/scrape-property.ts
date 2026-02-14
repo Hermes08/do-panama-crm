@@ -389,123 +389,140 @@ export const handler: Handler = async (event: HandlerEvent) => {
         logDebug(debugLogArray, `Identifying schema for ${hostname}`);
 
         try {
-            if (hostname.includes("encuentra24.com")) {
-                const schema = zodToJsonSchema(Encunetra24Schema, "Encuentra24Schema");
-                const result = await app.agent({
-                    prompt: "Extraer datos de la propiedad en la URL proporcionada, incluyendo descripción, amenidades, metraje, precio, cantidad de recámaras o detalles técnicos relevantes. Excluir números de contacto.",
-                    schema: schema,
-                    urls: [url],
-                    model: 'spark-1-mini',
-                });
+            // Parallelize Agent and Scrape requests with a timeout
+            const FIRECRAWL_TIMEOUT = 9500; // 9.5s timeout for Netlify 10s limit
 
-                if (result.success && result.data) {
-                    const data = result.data as z.infer<typeof Encunetra24Schema>;
-                    propertyData = {
-                        title: data.encuentra24_title || "Encuentra24 Property",
-                        price: data.encuentra24_price || "Contact for Price",
-                        location: data.encuentra24_location || "Panama",
-                        description: data.encuentra24_description,
-                        features: data.encuentra24_amenities?.map(a => a.value) || [],
-                        bedrooms: data.encuentra24_bedrooms || "",
-                        bathrooms: data.encuentra24_bathrooms || "",
-                        area: data.encuentra24_square_footage || "",
-                        images: [],
-                        source: "Encuentra24"
-                    };
-                }
-            } else if (hostname.includes("jamesedition.com")) {
-                const schema = zodToJsonSchema(JamesEditionSchema, "JamesEditionSchema");
-                const result = await app.agent({
-                    prompt: "Extraer datos de la propiedad desde la URL de JamesEdition.",
-                    schema: schema,
-                    urls: [url],
-                    model: 'spark-1-mini',
-                });
-                if (result.success && result.data) {
-                    const data = result.data as z.infer<typeof JamesEditionSchema>;
-                    propertyData = {
-                        title: data.jamesedition_title || "JamesEdition Property",
-                        price: data.jamesedition_price_usd ? `$${data.jamesedition_price_usd}` : "Contact for Price",
-                        location: data.jamesedition_location || "Panama",
-                        description: data.jamesedition_description,
-                        features: data.jamesedition_amenities?.map(a => a.value) || [],
-                        bedrooms: data.jamesedition_bedrooms?.toString() || "",
-                        bathrooms: data.jamesedition_bathrooms?.toString() || "",
-                        area: data.jamesedition_square_footage?.toString() || "",
-                        images: [],
-                        source: "JamesEdition"
-                    };
-                }
-            } else if (hostname.includes("compreoalquile.com")) {
-                const schema = zodToJsonSchema(CompreoalquileSchema, "CompreoalquileSchema");
-                const result = await app.agent({
-                    prompt: "Extraer datos técnicos de la propiedad en Compreoalquile.",
-                    schema: schema,
-                    urls: [url],
-                    model: 'spark-1-mini',
-                });
-                if (result.success && result.data) {
-                    const data = result.data as z.infer<typeof CompreoalquileSchema>;
-                    propertyData = {
-                        title: data.title || "Compreoalquile Property",
-                        price: data.price ? `$${data.price}` : "Contact for Price",
-                        location: data.location || "Panama",
-                        description: data.description,
-                        features: data.amenities?.map(a => a.value) || [],
-                        bedrooms: data.bedrooms?.toString() || "",
-                        bathrooms: data.bathrooms?.toString() || "",
-                        area: data.square_footage?.toString() || "",
-                        images: [],
-                        source: "Compreoalquile"
-                    };
-                }
-            } else if (hostname.includes("mlsacobir.com")) {
-                const schema = zodToJsonSchema(MLSAcobirSchema, "MLSAcobirSchema");
-                const result = await app.agent({
-                    prompt: "Extraer datos de la propiedad desde MLS Acobir.",
-                    schema: schema,
-                    urls: [url],
-                    model: 'spark-1-mini',
-                });
-                if (result.success && result.data) {
-                    const data = result.data as z.infer<typeof MLSAcobirSchema>;
-                    propertyData = {
-                        title: data.title || "MLS Acobir Property",
-                        price: data.price ? `$${data.price}` : "Contact for Price",
-                        location: data.location || "Panama",
-                        description: data.description,
-                        features: data.amenities?.map(a => a.value) || [],
-                        bedrooms: data.bedrooms?.toString() || "",
-                        bathrooms: data.bathrooms?.toString() || "",
-                        area: data.square_footage?.toString() || "",
-                        images: [],
-                        source: "MLS Acobir"
-                    };
-                }
-            } else {
-                throw new Error("Unsupported domain for agent extraction");
-            }
+            const firecrawlTask = async (): Promise<Partial<PropertyData>> => {
+                let agentData: Partial<PropertyData> = {};
+                let scrapeImages: string[] = [];
 
-            logDebug(debugLogArray, "Agent extraction successful");
-
-            // Extract Images via fallback scrape (Agent doesn't return images reliably)
-            const scrapeResult = await app.scrape(url, { formats: ['html'] });
-            if (scrapeResult.html) {
-                const $ = cheerio.load(scrapeResult.html);
-                // Reuse image extraction logic (simplification of previous function)
-                const imgs: string[] = [];
-                $('img').each((i, el) => {
-                    const src = $(el).attr('src');
-                    if (src && src.startsWith('http') && !src.includes('logo') && !src.includes('icon')) {
-                        imgs.push(src);
+                // Prepare Agent Promise
+                const agentPromise = (async () => {
+                    if (hostname.includes("encuentra24.com")) {
+                        const schema = zodToJsonSchema(Encunetra24Schema, "Encuentra24Schema");
+                        const result = await app.agent({
+                            prompt: "Extraer datos de la propiedad en la URL proporcionada, incluyendo descripción, amenidades, metraje, precio, cantidad de recámaras o detalles técnicos relevantes. Excluir números de contacto.",
+                            schema: schema,
+                            urls: [url],
+                            model: 'spark-1-mini',
+                        });
+                        if (result.success && result.data) {
+                            const data = result.data as z.infer<typeof Encunetra24Schema>;
+                            return {
+                                title: data.encuentra24_title || "Encuentra24 Property",
+                                price: data.encuentra24_price || "Contact for Price",
+                                location: data.encuentra24_location || "Panama",
+                                description: data.encuentra24_description,
+                                features: data.encuentra24_amenities?.map(a => a.value) || [],
+                                bedrooms: data.encuentra24_bedrooms || "",
+                                bathrooms: data.encuentra24_bathrooms || "",
+                                area: data.encuentra24_square_footage || "",
+                                source: "Encuentra24"
+                            };
+                        }
+                    } else if (hostname.includes("jamesedition.com")) {
+                        const schema = zodToJsonSchema(JamesEditionSchema, "JamesEditionSchema");
+                        const result = await app.agent({
+                            prompt: "Extraer datos de la propiedad desde la URL de JamesEdition.",
+                            schema: schema,
+                            urls: [url],
+                            model: 'spark-1-mini',
+                        });
+                        if (result.success && result.data) {
+                            const data = result.data as z.infer<typeof JamesEditionSchema>;
+                            return {
+                                title: data.jamesedition_title || "JamesEdition Property",
+                                price: data.jamesedition_price_usd ? `$${data.jamesedition_price_usd}` : "Contact for Price",
+                                location: data.jamesedition_location || "Panama",
+                                description: data.jamesedition_description,
+                                features: data.jamesedition_amenities?.map(a => a.value) || [],
+                                bedrooms: data.jamesedition_bedrooms?.toString() || "",
+                                bathrooms: data.jamesedition_bathrooms?.toString() || "",
+                                area: data.jamesedition_square_footage?.toString() || "",
+                                source: "JamesEdition"
+                            };
+                        }
+                    } else if (hostname.includes("compreoalquile.com")) {
+                        const schema = zodToJsonSchema(CompreoalquileSchema, "CompreoalquileSchema");
+                        const result = await app.agent({
+                            prompt: "Extraer datos técnicos de la propiedad en Compreoalquile.",
+                            schema: schema,
+                            urls: [url],
+                            model: 'spark-1-mini',
+                        });
+                        if (result.success && result.data) {
+                            const data = result.data as z.infer<typeof CompreoalquileSchema>;
+                            return {
+                                title: data.title || "Compreoalquile Property",
+                                price: data.price ? `$${data.price}` : "Contact for Price",
+                                location: data.location || "Panama",
+                                description: data.description,
+                                features: data.amenities?.map(a => a.value) || [],
+                                bedrooms: data.bedrooms?.toString() || "",
+                                bathrooms: data.bathrooms?.toString() || "",
+                                area: data.square_footage?.toString() || "",
+                                source: "Compreoalquile"
+                            };
+                        }
+                    } else if (hostname.includes("mlsacobir.com")) {
+                        const schema = zodToJsonSchema(MLSAcobirSchema, "MLSAcobirSchema");
+                        const result = await app.agent({
+                            prompt: "Extraer datos de la propiedad desde MLS Acobir.",
+                            schema: schema,
+                            urls: [url],
+                            model: 'spark-1-mini',
+                        });
+                        if (result.success && result.data) {
+                            const data = result.data as z.infer<typeof MLSAcobirSchema>;
+                            return {
+                                title: data.title || "MLS Acobir Property",
+                                price: data.price ? `$${data.price}` : "Contact for Price",
+                                location: data.location || "Panama",
+                                description: data.description,
+                                features: data.amenities?.map(a => a.value) || [],
+                                bedrooms: data.bedrooms?.toString() || "",
+                                bathrooms: data.bathrooms?.toString() || "",
+                                area: data.square_footage?.toString() || "",
+                                source: "MLS Acobir"
+                            };
+                        }
+                    } else {
+                        throw new Error("Unsupported domain for agent extraction");
                     }
-                });
-                // Filter top 10 unique
-                propertyData.images = [...new Set(imgs)].slice(0, 15);
-            }
+                    return {};
+                })();
+
+                // Prepare Scrape Promise (for images)
+                const scrapePromise = (async () => {
+                    const scrapeResult = await app.scrape(url, { formats: ['html'] });
+                    if (scrapeResult.html) {
+                        const $ = cheerio.load(scrapeResult.html);
+                        const imgs: string[] = [];
+                        $('img').each((i, el) => {
+                            const src = $(el).attr('src');
+                            if (src && src.startsWith('http') && !src.includes('logo') && !src.includes('icon')) {
+                                imgs.push(src);
+                            }
+                        });
+                        return [...new Set(imgs)].slice(0, 15);
+                    }
+                    return [];
+                })();
+
+                const [agentResult, imagesResult] = await Promise.all([agentPromise, scrapePromise]);
+                return { ...agentResult, images: imagesResult };
+            };
+
+            const timeoutTask = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("Firecrawl timeout")), FIRECRAWL_TIMEOUT)
+            );
+
+            const firecrawlData = await Promise.race([firecrawlTask(), timeoutTask]);
+            propertyData = { ...propertyData, ...firecrawlData };
+            logDebug(debugLogArray, "Parallel extraction successful");
 
         } catch (sdkError) {
-            logDebug(debugLogArray, `SDK/Agent failed: ${sdkError}. Falling back to Direct Fetch.`);
+            logDebug(debugLogArray, `SDK/Agent failed or timed out: ${sdkError}. Falling back to Direct Fetch.`);
 
             // FINAL FALLBACK: Direct Fetch
             const directResponse = await fetch(url, {
@@ -527,6 +544,11 @@ export const handler: Handler = async (event: HandlerEvent) => {
                 if (!propertyData.price) {
                     const priceMatch = html.match(/\$[\d,]+\.?\d*/);
                     if (priceMatch) propertyData.price = priceMatch[0];
+                }
+
+                // Fallback image extraction
+                if (!propertyData.images || propertyData.images.length === 0) {
+                    propertyData.images = extractPropertyImages($, url);
                 }
 
                 logDebug(debugLogArray, "Direct fetch fallback successful");
