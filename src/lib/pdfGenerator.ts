@@ -127,43 +127,18 @@ function buildDetailsPage(data: PropertyData): string {
     </div>`;
 }
 
-function buildGalleryPage(images: string[], pageNum: number, totalPages: number): string {
-    const count = images.length;
-    let grid = '';
-
-    if (count === 1) {
-        grid = `<img src="${images[0]}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />`;
-    } else if (count === 2) {
-        grid = `
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; height:100%;">
-            <img src="${images[0]}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />
-            <img src="${images[1]}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />
-        </div>`;
-    } else if (count === 3) {
-        grid = `
-        <div style="display:grid; grid-template-columns:1.3fr 0.7fr; grid-template-rows:1fr 1fr; gap:8px; height:100%;">
-            <img src="${images[0]}" style="width:100%; height:100%; object-fit:cover; border-radius:8px; grid-row:1/3;" />
-            <img src="${images[1]}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />
-            <img src="${images[2]}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />
-        </div>`;
-    } else {
-        // 4 images — 2x2 grid
-        grid = `
-        <div style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:8px; height:100%;">
-            ${images.map(src => `<img src="${src}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" />`).join('')}
-        </div>`;
-    }
-
-    const label = totalPages > 1 ? `Gallery (${pageNum}/${totalPages})` : 'Gallery';
+function buildGalleryPage(imageSrc: string, pageNum: number, totalPages: number): string {
+    const label = `${pageNum} / ${totalPages}`;
 
     return `
-    <div class="page gallery-page" style="background: #0f172a; padding: 40px 50px;">
-        <div style="margin-bottom: 20px;">
-            <p style="font-size: 11px; letter-spacing: 3px; color: #38bdf8; text-transform: uppercase; margin: 0 0 4px 0;">${label}</p>
-            <div style="width: 40px; height: 2px; background: #38bdf8;"></div>
+    <div class="page gallery-page" style="background: #0f172a; padding: 0; display:flex; flex-direction:column;">
+        <div style="flex:1; display:flex; align-items:center; justify-content:center; padding: 20px;">
+            <img src="${imageSrc}" style="max-width:100%; max-height:100%; object-fit:contain; border-radius:4px;" />
         </div>
-        <div style="height: calc(100% - 60px);">
-            ${grid}
+        <div style="padding: 8px 30px 12px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="width:40px; height:2px; background:#38bdf8;"></div>
+            <p style="font-size:10px; letter-spacing:2px; color:rgba(255,255,255,0.4); text-transform:uppercase; margin:0;">Photo ${label}</p>
+            <div style="width:40px; height:2px; background:#38bdf8;"></div>
         </div>
         <div style="position:absolute; bottom:0; left:0; right:0; height:4px; background: linear-gradient(90deg, #38bdf8, #a78bfa, #f472b6);"></div>
     </div>`;
@@ -196,22 +171,17 @@ export async function generatePropertyPDF(
     // Prepare images — deduplicate, load as base64 for reliable PDF embedding
     const allImageUrls = [...new Set([...customImages, ...propertyData.images])];
 
-    // Load images in parallel (max 20 to avoid overwhelming)
-    const imagePromises = allImageUrls.slice(0, 20).map(url => toBase64(url));
+    // Load images in parallel as base64 for reliable embedding
+    const imagePromises = allImageUrls.map(url => toBase64(url));
     const base64Images = (await Promise.all(imagePromises)).filter(Boolean) as string[];
 
     // Hero image = first one
     const heroImage = base64Images[0] || null;
 
-    // Build gallery pages (4 images per page)
-    const IMAGES_PER_PAGE = 4;
+    // Build gallery pages — one full-bleed image per page (no cropping, no blank pages)
     const galleryPages: string[] = [];
-    const totalGalleryPages = Math.ceil(base64Images.length / IMAGES_PER_PAGE);
-
-    for (let i = 0; i < base64Images.length; i += IMAGES_PER_PAGE) {
-        const batch = base64Images.slice(i, i + IMAGES_PER_PAGE);
-        const pageNum = Math.floor(i / IMAGES_PER_PAGE) + 1;
-        galleryPages.push(buildGalleryPage(batch, pageNum, totalGalleryPages));
+    for (let i = 0; i < base64Images.length; i++) {
+        galleryPages.push(buildGalleryPage(base64Images[i], i + 1, base64Images.length));
     }
 
     // Assemble full HTML document
