@@ -41,10 +41,10 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
     const [customImages, setCustomImages] = useState<string[]>([]);
 
     const router = useRouter();
-    const supabase = createBrowserClient(
+    const [supabase] = useState(() => createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    ));
 
     const [error, setError] = useState("");
     const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
