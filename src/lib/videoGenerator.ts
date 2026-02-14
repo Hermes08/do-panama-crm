@@ -14,11 +14,12 @@ interface PropertyData {
 
 // Configuration
 const FPS = 30;
+const FRAME_INTERVAL = 1000 / FPS; // ~33ms per frame
 const WIDTH = 1280;
 const HEIGHT = 720;
 const TITLE_DURATION = 4000;
 const STATS_DURATION = 4000;
-const IMAGE_DURATION = 4000; // ms per image slide
+const IMAGE_DURATION = 5000; // ms per image slide (increased from 4s to 5s)
 
 // Helper to get proxied URL for external images
 function getProxiedUrl(url: string): string {
@@ -48,6 +49,8 @@ const loadImage = (url: string): Promise<HTMLImageElement> => {
 
 /**
  * Generates a video Blob from property data using Canvas + MediaRecorder.
+ * Uses setTimeout-based rendering to avoid requestAnimationFrame throttling
+ * when the browser tab is not focused (which would cause skipped frames).
  */
 export async function generatePropertyVideo(
     data: PropertyData,
@@ -80,6 +83,8 @@ export async function generatePropertyVideo(
         throw new Error("No images available for video.");
     }
 
+    console.log(`[VideoGen] Generating video with ${loadedImages.length} images, ${IMAGE_DURATION / 1000}s each`);
+
     // 3. Setup Recorder
     const stream = canvas.captureStream(FPS);
     const mimeType = MediaRecorder.isTypeSupported("video/webm; codecs=vp9")
@@ -106,15 +111,27 @@ export async function generatePropertyVideo(
 
     recorder.start();
 
-    // 4. Animation Loop
-    const startTime = performance.now();
+    // 4. Frame-by-frame rendering using virtual time
+    // We use a virtual clock instead of real wall-clock time so that
+    // every frame is guaranteed to be rendered, even if setTimeout drifts
+    // or the tab is throttled.
     const totalDuration = TITLE_DURATION + STATS_DURATION + (loadedImages.length * IMAGE_DURATION);
+    const totalFrames = Math.ceil(totalDuration / FRAME_INTERVAL);
+    let currentFrame = 0;
 
-    const animate = (time: number) => {
-        // We use performance.now() relative to start
-        // requestAnimationFrame passes a timestamp, but let's re-eval to be safe with closure
-        const now = performance.now();
-        const elapsed = now - startTime;
+    console.log(`[VideoGen] Total duration: ${(totalDuration / 1000).toFixed(1)}s, Total frames: ${totalFrames}`);
+
+    const renderFrame = () => {
+        if (currentFrame >= totalFrames) {
+            // All frames rendered — stop recording
+            if (recorder.state === "recording") {
+                recorder.stop();
+            }
+            return;
+        }
+
+        // Virtual elapsed time based on frame count (not wall clock)
+        const elapsed = currentFrame * FRAME_INTERVAL;
 
         // Clear
         ctx.fillStyle = "#0f172a"; // Slate 900
@@ -262,27 +279,27 @@ export async function generatePropertyVideo(
                     ctx.textAlign = "center";
                     ctx.fillText(featureText, WIDTH / 2, HEIGHT - 50);
                 }
-            } else {
-                // End loop
-                if (recorder.state === "recording") {
-                    recorder.stop();
-                }
-                return;
             }
         }
 
         // Progress callback
         if (onProgress) {
-            onProgress(Math.min(1, elapsed / totalDuration));
+            onProgress(Math.min(1, (currentFrame + 1) / totalFrames));
         }
 
-        if (recorder.state === "recording") {
-            requestAnimationFrame(animate);
+        currentFrame++;
+
+        // Schedule next frame using setTimeout (not requestAnimationFrame)
+        // This ensures consistent rendering even when the tab is in background
+        if (currentFrame < totalFrames && recorder.state === "recording") {
+            setTimeout(renderFrame, 0); // Render as fast as possible, virtual time handles timing
+        } else if (recorder.state === "recording") {
+            recorder.stop();
         }
     };
 
-    // Start loop
-    requestAnimationFrame(animate);
+    // Start rendering
+    renderFrame();
 
     return completionPromise;
 }
