@@ -165,6 +165,11 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                         setPropertyData(resultData);
                         setLoading(false);
 
+                        // Pre-select images for edition
+                        if (resultData.images && Array.isArray(resultData.images)) {
+                            setCustomImages(resultData.images);
+                        }
+
                         // Auto-translate
                         setTranslating(true);
                         try {
@@ -738,6 +743,22 @@ export default function PropertyPDFGenerator({ lang }: PropertyPDFGeneratorProps
                     </div>
                 )
             }
+            {/* Modals */}
+            {showDataEditor && (translatedData || propertyData) && (
+                <PropertyDataEditor
+                    data={translatedData || propertyData!}
+                    onUpdate={(newData) => translatedData ? setTranslatedData(newData) : setPropertyData(newData)}
+                    onClose={() => setShowDataEditor(false)}
+                />
+            )}
+
+            {showImageManager && (
+                <ImageManager
+                    images={customImages.length > 0 ? customImages : (propertyData?.images || [])}
+                    onUpdate={(newImages) => setCustomImages(newImages)}
+                    onClose={() => setShowImageManager(false)}
+                />
+            )}
         </div >
     );
 }
