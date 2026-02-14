@@ -20,14 +20,29 @@ const TITLE_DURATION = 4000;
 const STATS_DURATION = 4000;
 const IMAGE_DURATION = 4000; // ms per image slide
 
+// Helper to get proxied URL for external images
+function getProxiedUrl(url: string): string {
+    if (!url || url.startsWith('data:') || url.startsWith('blob:')) return url;
+    try {
+        const parsed = new URL(url);
+        if (parsed.origin !== window.location.origin) {
+            return `/.netlify/functions/proxy-image?url=${encodeURIComponent(url)}`;
+        }
+    } catch { /* not a valid URL */ }
+    return url;
+}
+
 // Helper to load image
 const loadImage = (url: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
         const img = new Image();
-        img.crossOrigin = "Anonymous";
+        const proxiedUrl = getProxiedUrl(url);
+        if (proxiedUrl !== url || url.startsWith('data:')) {
+            img.crossOrigin = "Anonymous";
+        }
         img.onload = () => resolve(img);
         img.onerror = () => reject(new Error(`Failed to load ${url}`));
-        img.src = url;
+        img.src = proxiedUrl;
     });
 };
 

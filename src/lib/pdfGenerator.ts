@@ -13,11 +13,28 @@ interface PropertyData {
     source: string;
 }
 
+// Helper to get proxied URL for external images
+function getProxiedUrl(url: string): string {
+    if (!url || url.startsWith('data:') || url.startsWith('blob:')) return url;
+    // If it's an external URL, route through our proxy
+    try {
+        const parsed = new URL(url);
+        if (parsed.origin !== window.location.origin) {
+            return `/.netlify/functions/proxy-image?url=${encodeURIComponent(url)}`;
+        }
+    } catch { /* not a valid URL, return as-is */ }
+    return url;
+}
+
 // Helper to load image with fallback
 async function loadImageAsDataURL(url: string): Promise<string | null> {
     return new Promise((resolve) => {
         const img = new Image();
-        img.crossOrigin = "Anonymous";
+        const proxiedUrl = getProxiedUrl(url);
+        // Only set crossOrigin if using proxy (same origin) or data URL
+        if (proxiedUrl !== url || url.startsWith('data:')) {
+            img.crossOrigin = "Anonymous";
+        }
 
         img.onload = () => {
             try {
@@ -43,8 +60,8 @@ async function loadImageAsDataURL(url: string): Promise<string | null> {
             resolve(null);
         };
 
-        // Trigger load
-        img.src = url;
+        // Trigger load via proxy
+        img.src = proxiedUrl;
     });
 }
 
