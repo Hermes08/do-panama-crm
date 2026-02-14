@@ -57,25 +57,27 @@ function buildCoverPage(data: PropertyData, heroImage: string | null): string {
         <div style="position:absolute; inset:0; background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);"></div>
         `}
         <div style="position:relative; z-index:1; height:100%; display:flex; flex-direction:column; justify-content:flex-end; padding: 60px 50px;">
-            <div style="border-left: 4px solid #38bdf8; padding-left: 20px; margin-bottom: 20px;">
-                <p style="font-family: 'Segoe UI', sans-serif; font-size: 13px; letter-spacing: 4px; color: #38bdf8; margin: 0 0 12px 0; text-transform: uppercase;">Exclusive Listing</p>
-                <h1 style="font-family: 'Georgia', serif; font-size: 36px; color: #fff; margin: 0 0 16px 0; line-height: 1.2; font-weight: 400;">${data.title}</h1>
-                <p style="font-family: 'Segoe UI', sans-serif; font-size: 14px; color: rgba(255,255,255,0.7); margin: 0;">
-                    <span style="display:inline-block; margin-right: 6px;">📍</span>${data.location}
-                </p>
-            </div>
-            <div style="margin-top: 24px; display: flex; align-items: center; gap: 30px;">
-                <div style="background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.3); border-radius: 10px; padding: 16px 28px;">
-                    <p style="font-family: 'Segoe UI', sans-serif; font-size: 11px; color: #38bdf8; margin: 0 0 4px 0; letter-spacing: 2px; text-transform: uppercase;">Asking Price</p>
-                    <p style="font-family: 'Georgia', serif; font-size: 32px; color: #fff; margin: 0; font-weight: 700;">${data.price}</p>
+            <div style="background: rgba(15,23,42,0.65); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 30px 36px;">
+                <div style="border-left: 4px solid #38bdf8; padding-left: 20px; margin-bottom: 20px;">
+                    <p style="font-family: 'Segoe UI', sans-serif; font-size: 13px; letter-spacing: 4px; color: #38bdf8; margin: 0 0 12px 0; text-transform: uppercase;">Exclusive Listing</p>
+                    <h1 style="font-family: 'Georgia', serif; font-size: 36px; color: #fff; margin: 0 0 16px 0; line-height: 1.2; font-weight: 400;">${data.title}</h1>
+                    <p style="font-family: 'Segoe UI', sans-serif; font-size: 14px; color: rgba(255,255,255,0.7); margin: 0;">
+                        <span style="display:inline-block; margin-right: 6px;">📍</span>${data.location}
+                    </p>
                 </div>
-                ${data.bedrooms || data.bathrooms || data.area ? `
-                <div style="display: flex; gap: 24px;">
-                    ${data.bedrooms ? `<div style="text-align:center;"><p style="font-size:24px; color:#fff; margin:0; font-weight:600;">${data.bedrooms}</p><p style="font-size:11px; color:rgba(255,255,255,0.6); margin:4px 0 0; text-transform:uppercase; letter-spacing:1px;">Beds</p></div>` : ''}
-                    ${data.bathrooms ? `<div style="text-align:center;"><p style="font-size:24px; color:#fff; margin:0; font-weight:600;">${data.bathrooms}</p><p style="font-size:11px; color:rgba(255,255,255,0.6); margin:4px 0 0; text-transform:uppercase; letter-spacing:1px;">Baths</p></div>` : ''}
-                    ${data.area ? `<div style="text-align:center;"><p style="font-size:24px; color:#fff; margin:0; font-weight:600;">${data.area}</p><p style="font-size:11px; color:rgba(255,255,255,0.6); margin:4px 0 0; text-transform:uppercase; letter-spacing:1px;">Area</p></div>` : ''}
+                <div style="margin-top: 24px; display: flex; align-items: center; gap: 30px;">
+                    <div style="background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.3); border-radius: 10px; padding: 16px 28px;">
+                        <p style="font-family: 'Segoe UI', sans-serif; font-size: 11px; color: #38bdf8; margin: 0 0 4px 0; letter-spacing: 2px; text-transform: uppercase;">Asking Price</p>
+                        <p style="font-family: 'Georgia', serif; font-size: 32px; color: #fff; margin: 0; font-weight: 700;">${data.price}</p>
+                    </div>
+                    ${data.bedrooms || data.bathrooms || data.area ? `
+                    <div style="display: flex; gap: 24px;">
+                        ${data.bedrooms ? `<div style="text-align:center;"><p style="font-size:24px; color:#fff; margin:0; font-weight:600;">${data.bedrooms}</p><p style="font-size:11px; color:rgba(255,255,255,0.6); margin:4px 0 0; text-transform:uppercase; letter-spacing:1px;">Beds</p></div>` : ''}
+                        ${data.bathrooms ? `<div style="text-align:center;"><p style="font-size:24px; color:#fff; margin:0; font-weight:600;">${data.bathrooms}</p><p style="font-size:11px; color:rgba(255,255,255,0.6); margin:4px 0 0; text-transform:uppercase; letter-spacing:1px;">Baths</p></div>` : ''}
+                        ${data.area ? `<div style="text-align:center;"><p style="font-size:24px; color:#fff; margin:0; font-weight:600;">${data.area}</p><p style="font-size:11px; color:rgba(255,255,255,0.6); margin:4px 0 0; text-transform:uppercase; letter-spacing:1px;">Area</p></div>` : ''}
+                    </div>
+                    ` : ''}
                 </div>
-                ` : ''}
             </div>
         </div>
         <div style="position:absolute; bottom:0; left:0; right:0; height:4px; background: linear-gradient(90deg, #38bdf8, #a78bfa, #f472b6);"></div>
