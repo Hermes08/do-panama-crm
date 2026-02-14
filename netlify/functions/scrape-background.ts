@@ -167,154 +167,108 @@ const Handler: BackgroundHandler = async (event) => {
                 finalData.images = Array.from(existingImages);
                 logDebug(`Enhanced image count to ${finalData.images.length}`);
             }
-            // --- IMAGE PROXY / STORAGE (Fix CORS) ---
-            // Iterate through unique images, download them, upload to Supabase 'property-images' bucket
-            // and replace the URL in finalData.images with the public Supabase URL.
-            logDebug("Proxying images to Supabase Storage...");
-            const uniqueImages = Array.from(new Set(finalData.images || []));
-            const proxiedImages: string[] = [];
-
-            for (const imgUrl of uniqueImages) {
-                try {
-                    // 1. Download Image
-                    const response = await fetch(imgUrl as string);
-                    if (!response.ok) {
-                        console.warn(`Failed to fetch image: ${imgUrl}`);
-                        continue;
-                    }
-                    const arrayBuffer = await response.arrayBuffer();
-                    const buffer = Buffer.from(arrayBuffer);
-
-                    // 2. Generate Filename (hash or random)
-                    // Extract extension or default to .jpg
-                    let ext = 'jpg';
-                    const contentType = response.headers.get('content-type');
-                    if (contentType === 'image/png') ext = 'png';
-                    else if (contentType === 'image/webp') ext = 'webp';
-                    else if (contentType === 'image/jpeg') ext = 'jpg';
-
-                    const filename = `${requestId}/${crypto.randomUUID()}.${ext}`;
-
-                    // 3. Upload to Supabase
-                    const { error: uploadError } = await supabase.storage
-                        .from('property-images')
-                        .upload(filename, buffer, {
-                            contentType: contentType || 'image/jpeg',
-                            upsert: false
-                        });
-
-                    if (uploadError) {
-                        console.error(`Failed to upload image ${imgUrl}:`, uploadError);
-                        // Fallback to original URL if upload fails? Or skip?
-                        // Let's keep original for now as fallback, but users might see broken images if CORS blocks.
-                        // Actually, if CORS blocks, original is useless for PDF.
-                        // We'll push original, but it won't fix PDF issue.
-                        proxiedImages.push(imgUrl as string);
-                    } else {
-                        // 4. Get Public URL
-                        const { data: { publicUrl } } = supabase.storage
-                            .from('property-images')
-                            .getPublicUrl(filename);
-
-                        proxiedImages.push(publicUrl);
-                    }
-
-                } catch (err) {
-                    console.error(`Error proxying image ${imgUrl}:`, err);
-                    proxiedImages.push(imgUrl as string);
-                }
-            }
-
-            finalData.images = proxiedImages;
-            logDebug(`Proxied ${proxiedImages.length} images.`);
-
-            // --- SAVE TO SUPABASE ---
-            logDebug("Saving results to Supabase...");
-            const { error: saveError } = await supabase
-                .from("scraped_results")
-                .update({
-                    status: "completed",
-                    data: finalData,
-                    updated_at: new Date().toISOString()
-                })
-                .eq("id", requestId);
-
-            if (saveError) {
-                console.error("Failed to save result to Supabase", saveError);
-            } else {
-                logDebug("Successfully saved data.");
-            }
-
-        } catch (err: any) {
-            console.error("Background Scrape Failed", err);
-            logDebug(`CRITICAL FAILURE: ${err.message}`);
-
-            await supabase
-                .from("scraped_results")
-                .update({
-                    status: "failed",
-                    error: err.message,
-                    data: { debugLog: debugLogArray }, // Save logs even on failure
-                    updated_at: new Date().toISOString()
-                })
-                .eq("id", requestId);
         }
-    };
 
-    // --- HELPER FUNCTIONS (Duplicated/Shared from scrape-property.ts - simpler version) ---
+        // --- IMAGE PROXY / STORAGE (Fix CORS) ---
+        // Iterate through unique images, download them, upload to Supabase 'property-images' bucket
+        // and replace the URL in finalData.images with the public Supabase URL.
+        logDebug("Proxying images to Supabase Storage...");
+        const uniqueImages = Array.from(new Set(finalData.images || []));
+        const proxiedImages: string[] = [];
 
-    function extractImagesFromHtml(html: string, baseUrl: string): string[] {
-        const $ = cheerio.load(html);
-        const images = new Set<string>();
+        for (const imgUrl of uniqueImages) {
+            try {
+                // 1. Download Image
+                const response = await fetch(imgUrl as string);
+                if (!response.ok) {
+                    console.warn(`Failed to fetch image: ${imgUrl}`);
+                    continue;
+                }
+                const arrayBuffer = await response.arrayBuffer();
+                const buffer = Buffer.from(arrayBuffer);
 
-        // Common gallery selectors
-        $('img').each((_, el) => {
-            let src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src');
-            if (src) {
-                // Filter out small icons/logos
-                if (src.includes('logo') || src.includes('icon') || src.includes('profile')) return;
-                // Resolve relative URLs
-                try {
-                    if (!src.startsWith('http')) {
-                        src = new URL(src, baseUrl).toString();
-                    }
-                    images.add(src);
-                } catch (e) { }
-            }
-        });
+                // 2. Generate Filename (hash or random)
+                // Extract extension or default to .jpg
+                let ext = 'jpg';
+                const contentType = response.headers.get('content-type');
+                if (contentType === 'image/png') ext = 'png';
+                else if (contentType === 'image/webp') ext = 'webp';
+                else if (contentType === 'image/jpeg') ext = 'jpg';
 
-        // Special handling for meta tags (og:image) - often high quality
-        $('meta[property="og:image"]').each((_, el) => {
-            const content = $(el).attr('content');
-            if (content) images.add(content);
-        });
+                const filename = `${requestId}/${crypto.randomUUID()}.${ext}`;
 
-        return Array.from(images);
-    }
+                // 3. Upload to Supabase
+                // Ensure bucket exists (best effort)
+                // Note: creating bucket here might fail if we don't have permissions, but we'll try.
+                // Actually, checking existence every time is slow. Let's just try upload.
+                // If it fails with 'Bucket not found', we could try to create it, but that's complex.
+                // We'll rely on the setup script having worked or being run manually if needed.
+                // But since the script hung, let's try to ensure public access is set if we can.
 
-    function extractWithCheerio(html: string, url: string) {
-        const $ = cheerio.load(html);
+                const { error: uploadError } = await supabase.storage
+                    .from('property-images')
+                    .upload(filename, buffer, {
+                        contentType: contentType || 'image/jpeg',
+                        upsert: false
+                    });
 
-        // Basic heuristics for fallback
-        const title = $('h1').first().text().trim() || $('title').text().trim();
-        const description = $('meta[name="description"]').attr('content') ||
-            $('div[class*="description"]').text().trim() ||
-            $('p').slice(0, 3).text().trim(); // First few paragraphs
+                if (uploadError) {
+                    console.error(`Failed to upload image ${imgUrl}:`, uploadError);
+                    // Fallback to original URL if upload fails? Or skip?
+                    // Let's keep original for now as fallback, but users might see broken images if CORS blocks.
+                    // Actually, if CORS blocks, original is useless for PDF.
+                    // We'll push original, but it won't fix PDF issue.
+                    proxiedImages.push(imgUrl as string);
+                    const images = new Set<string>();
 
-        let price = '';
-        // Try to find price-like patterns
-        const priceRegex = /[\$€£]\s*[0-9,.]+/;
-        const bodyText = $('body').text();
-        const priceMatch = bodyText.match(priceRegex);
-        if (priceMatch) price = priceMatch[0];
+                    // Common gallery selectors
+                    $('img').each((_, el) => {
+                        let src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-lazy-src');
+                        if (src) {
+                            // Filter out small icons/logos
+                            if (src.includes('logo') || src.includes('icon') || src.includes('profile')) return;
+                            // Resolve relative URLs
+                            try {
+                                if (!src.startsWith('http')) {
+                                    src = new URL(src, baseUrl).toString();
+                                }
+                                images.add(src);
+                            } catch (e) { }
+                        }
+                    });
 
-        return {
-            title,
-            description,
-            price,
-            location: "", // Hard to guess
-            features: []
-        };
-    }
+                    // Special handling for meta tags (og:image) - often high quality
+                    $('meta[property="og:image"]').each((_, el) => {
+                        const content = $(el).attr('content');
+                        if (content) images.add(content);
+                    });
 
-    export { Handler as handler };
+                    return Array.from(images);
+                }
+
+                function extractWithCheerio(html: string, url: string) {
+                    const $ = cheerio.load(html);
+
+                    // Basic heuristics for fallback
+                    const title = $('h1').first().text().trim() || $('title').text().trim();
+                    const description = $('meta[name="description"]').attr('content') ||
+                        $('div[class*="description"]').text().trim() ||
+                        $('p').slice(0, 3).text().trim(); // First few paragraphs
+
+                    let price = '';
+                    // Try to find price-like patterns
+                    const priceRegex = /[\$€£]\s*[0-9,.]+/;
+                    const bodyText = $('body').text();
+                    const priceMatch = bodyText.match(priceRegex);
+                    if (priceMatch) price = priceMatch[0];
+
+                    return {
+                        title,
+                        description,
+                        price,
+                        location: "", // Hard to guess
+                        features: []
+                    };
+                }
+
+                export { Handler as handler };
