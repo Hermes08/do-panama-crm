@@ -91,7 +91,8 @@ export async function generatePropertyVideo(
     let sourceNode: MediaElementAudioSourceNode | null = null;
     let destNode: MediaStreamAudioDestinationNode | null = null;
     
-    const musicUrl = "/audio/background.mp3?t=" + Date.now(); // Cache buster
+    // Use local file, cache busted
+    const musicUrl = "/audio/background.mp3"; 
 
     try {
         console.log(`[VideoGen] Initializing audio from ${musicUrl}`);
@@ -103,34 +104,34 @@ export async function generatePropertyVideo(
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioContext) {
             audioCtx = new AudioContext();
+            
+            // Resume context immediately (requires user gesture, provided by button click)
+            if (audioCtx.state === 'suspended') {
+                await audioCtx.resume();
+            }
+
             sourceNode = audioCtx.createMediaElementSource(audioEl);
             destNode = audioCtx.createMediaStreamDestination();
             
             // Connect ONLY to destination, NOT to audioCtx.destination (speakers)
             sourceNode.connect(destNode);
             
-            // We still need to "play" the element for it to process data
-            try {
-                // Attempt to play. Since it's not connected to speakers, 
-                // it might not require strict user gesture, or if it does, 
-                // the user just clicked "Generate" so we have a token.
-                await audioEl.play();
-            } catch (playErr) {
-                console.warn("[VideoGen] Auto-play failed, attempting mute fallback", playErr);
-                // Fallback: If play fails (e.g. no gesture), try muting. 
-                // Muted elements can often "play" without gesture, but might produce silent stream.
-                // However, via WebAudio, it might still work if we process it.
-                // Let's just catch and proceed.
-            }
+            // Attempt to play
+            await audioEl.play();
+            console.log("[VideoGen] Audio playing and routed to stream");
         }
     } catch (e) {
-        console.warn("[VideoGen] Audio initialization failed", e);
+        console.warn("[VideoGen] Audio setup failed, proceeding with silent video", e);
+        // Ensure we don't use broken audio components
+        if (audioEl) { audioEl.pause(); audioEl = null; }
+        if (audioCtx) { audioCtx.close(); audioCtx = null; }
+        destNode = null;
     }
 
     const stream = canvas.captureStream(FPS);
     
-    // Add audio track if available
-    if (destNode) {
+    // Add audio track ONLY if fully initialized
+    if (destNode && destNode.stream) {
         const audioTracks = destNode.stream.getAudioTracks();
         if (audioTracks.length > 0) {
             console.log("[VideoGen] WebAudio track added to stream");
@@ -142,11 +143,16 @@ export async function generatePropertyVideo(
         ? "video/webm; codecs=vp9"
         : "video/webm";
 
-    // 2.5 Mbps
+    console.log(`[VideoGen] Starting recorder with mimeType: ${mimeType}`);
     const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2500000 });
     const chunks: Blob[] = [];
+    
     recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    recorder.onerror = (e) => {
+        console.error("[VideoGen] Recorder Error:", e);
     };
 
     let resolveCompletion: (blob: Blob) => void;
@@ -156,23 +162,26 @@ export async function generatePropertyVideo(
     });
 
     recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: mimeType });
-        
-        // Cleanup Audio
         if (audioEl) {
-            audioEl.pause();
-            audioEl.src = "";
+            audioEl.pause(); 
             audioEl = null;
         }
         if (audioCtx) {
-            audioCtx.close();
+            if (audioCtx.state !== 'closed') audioCtx.close();
             audioCtx = null;
         }
-        
+
+        const blob = new Blob(chunks, { type: mimeType });
+        console.log(`[VideoGen] Recording finished. Blob size: ${blob.size} bytes`);
         resolveCompletion(blob);
     };
 
-    recorder.start();
+    try {
+        recorder.start();
+    } catch (err) {
+        console.error("[VideoGen] Failed to start recorder", err);
+        throw err;
+    }
 
     // 4. Frame-by-frame rendering using virtual time
     // We use a virtual clock instead of real wall-clock time so that
