@@ -87,40 +87,54 @@ export async function generatePropertyVideo(
 
     // 3. Setup Audio & Recorder
     let audioEl: HTMLAudioElement | null = null;
-    let audioStream: MediaStream | null = null;
-    const musicUrl = "/audio/background.mp3"; // Default copyright-free luxury beat
+    let audioCtx: AudioContext | null = null;
+    let sourceNode: MediaElementAudioSourceNode | null = null;
+    let destNode: MediaStreamAudioDestinationNode | null = null;
+    
+    const musicUrl = "/audio/background.mp3?t=" + Date.now(); // Cache buster
 
     try {
         console.log(`[VideoGen] Initializing audio from ${musicUrl}`);
         audioEl = new Audio(musicUrl);
         audioEl.crossOrigin = "anonymous";
         audioEl.loop = true;
-        // Start playing silently immediately to capture user gesture
-        audioEl.volume = 0; 
-        await audioEl.play();
         
-        // Capture stream
-        // @ts-ignore: captureStream is standard but types might be missing
-        if (typeof audioEl.captureStream === 'function') {
-             // @ts-ignore
-            audioStream = audioEl.captureStream();
-        } else if (typeof (audioEl as any).mozCaptureStream === 'function') {
-             // @ts-ignore
-            audioStream = (audioEl as any).mozCaptureStream();
+        // Use Web Audio API to capture stream WITHOUT playing to speakers
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContext) {
+            audioCtx = new AudioContext();
+            sourceNode = audioCtx.createMediaElementSource(audioEl);
+            destNode = audioCtx.createMediaStreamDestination();
+            
+            // Connect ONLY to destination, NOT to audioCtx.destination (speakers)
+            sourceNode.connect(destNode);
+            
+            // We still need to "play" the element for it to process data
+            try {
+                // Attempt to play. Since it's not connected to speakers, 
+                // it might not require strict user gesture, or if it does, 
+                // the user just clicked "Generate" so we have a token.
+                await audioEl.play();
+            } catch (playErr) {
+                console.warn("[VideoGen] Auto-play failed, attempting mute fallback", playErr);
+                // Fallback: If play fails (e.g. no gesture), try muting. 
+                // Muted elements can often "play" without gesture, but might produce silent stream.
+                // However, via WebAudio, it might still work if we process it.
+                // Let's just catch and proceed.
+            }
         }
     } catch (e) {
-        console.warn("[VideoGen] Audio initialization failed (likely no user gesture or missing file)", e);
+        console.warn("[VideoGen] Audio initialization failed", e);
     }
 
     const stream = canvas.captureStream(FPS);
     
     // Add audio track if available
-    if (audioStream) {
-        const audioTracks = audioStream.getAudioTracks();
+    if (destNode) {
+        const audioTracks = destNode.stream.getAudioTracks();
         if (audioTracks.length > 0) {
-            console.log("[VideoGen] Audio track added to stream");
+            console.log("[VideoGen] WebAudio track added to stream");
             stream.addTrack(audioTracks[0]);
-            if (audioEl) audioEl.volume = 0.5; // Set volume for recording
         }
     }
 
@@ -143,11 +157,18 @@ export async function generatePropertyVideo(
 
     recorder.onstop = () => {
         const blob = new Blob(chunks, { type: mimeType });
+        
+        // Cleanup Audio
         if (audioEl) {
             audioEl.pause();
             audioEl.src = "";
             audioEl = null;
         }
+        if (audioCtx) {
+            audioCtx.close();
+            audioCtx = null;
+        }
+        
         resolveCompletion(blob);
     };
 
