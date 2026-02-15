@@ -103,7 +103,7 @@ export async function generatePropertyVideo(
         console.log(`[VideoGen] Attempting to load audio from ${musicUrl}`);
         
         // Timeout promise to enforce fallback
-        const audioSetupPromise = new Promise<void>(async (resolve, reject) => {
+        const audioSetupPromise = new Promise<MediaStreamAudioDestinationNode>(async (resolve, reject) => {
              const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
              if (!AudioContext) return reject("Web Audio API not supported");
 
@@ -122,35 +122,40 @@ export async function generatePropertyVideo(
              el.loop = true;
              audioEl = el;
 
-             const source = ctx.createMediaElementSource(el);
-             const gain = ctx.createGain();
-             const dest = ctx.createMediaStreamDestination();
-             
-             gain.gain.value = 0.4; // Default volume
-             
-             source.connect(gain);
-             gain.connect(dest);
-             
-             gainNode = gain;
-             destNode = dest;
+             // Use try-catch for element source creation as it can fail with CORS sometimes
+             try {
+                const source = ctx.createMediaElementSource(el);
+                const gain = ctx.createGain();
+                const dest = ctx.createMediaStreamDestination();
+                
+                gain.gain.value = 0.4; // Default volume
+                
+                source.connect(gain);
+                gain.connect(dest);
+                
+                gainNode = gain;
+                // Don't assign destNode here to avoid side-effect confusion, return it.
 
-             // 4. Wait for playback to actually result in data
-             el.onplaying = () => resolve();
-             el.onerror = (e) => reject(e);
-             
-             await el.play();
+                // 4. Wait for playback to actually result in data
+                el.onplaying = () => resolve(dest);
+                el.onerror = (e) => reject(e);
+                
+                await el.play();
+             } catch (err) {
+                 reject(err);
+             }
         });
 
         // Race: Audio Setup vs 1.5s Timeout
         // If audio takes too long, we skip it to save the video recording.
-        await Promise.race([
+        destNode = await Promise.race([
             audioSetupPromise,
-            new Promise((_, reject) => setTimeout(() => reject("Audio init timeout"), 1500))
+            new Promise<MediaStreamAudioDestinationNode>((_, reject) => setTimeout(() => reject("Audio init timeout"), 1500))
         ]);
 
         console.log("[VideoGen] Audio initialized successfully");
 
-        // ONLY add track if setup fully succeeded
+        // ONLY add track if setup fully succeeded and node exists
         if (destNode && destNode.stream) {
             const audioTracks = destNode.stream.getAudioTracks();
             if (audioTracks.length > 0) {
