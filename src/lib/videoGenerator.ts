@@ -88,6 +88,7 @@ export async function generatePropertyVideo(
     console.log(`[VideoGen] Generating video with ${loadedImages.length} images, ${IMAGE_DURATION / 1000}s each`);
 
     // 3. Setup Audio (with strict fallback)
+    // 3. Setup Audio (with strict fallback)
     let audioCtx: AudioContext | null = null;
     let audioEl: HTMLAudioElement | null = null;
     let gainNode: GainNode | null = null;
@@ -103,9 +104,12 @@ export async function generatePropertyVideo(
         console.log(`[VideoGen] Attempting to load audio from ${musicUrl}`);
         
         // Timeout promise to enforce fallback
-        const audioSetupPromise = new Promise<MediaStreamAudioDestinationNode>(async (resolve, reject) => {
+        const audioSetupPromise = new Promise<MediaStreamAudioDestinationNode>((resolve, reject) => {
              const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-             if (!AudioContext) return reject("Web Audio API not supported");
+             if (!AudioContext) {
+                 reject("Web Audio API not supported");
+                 return;
+             }
 
              // 1. Create Context
              const ctx = new AudioContext();
@@ -113,11 +117,12 @@ export async function generatePropertyVideo(
 
              // 2. Resume if suspended (critical for Chrome)
              if (ctx.state === 'suspended') {
-                 await ctx.resume();
+                 ctx.resume().catch(e => console.warn("Context resume failed", e));
              }
              
              // 3. Setup Element & Graph
-             const el = new Audio(musicUrl);
+             // Explicitly cast to HTMLAudioElement to avoid inference issues
+             const el = new Audio(musicUrl) as HTMLAudioElement;
              el.crossOrigin = "anonymous";
              el.loop = true;
              audioEl = el;
@@ -134,20 +139,20 @@ export async function generatePropertyVideo(
                 gain.connect(dest);
                 
                 gainNode = gain;
-                // Don't assign destNode here to avoid side-effect confusion, return it.
+                // destNode = dest; // Don't assign, return it
 
                 // 4. Wait for playback to actually result in data
                 el.onplaying = () => resolve(dest);
                 el.onerror = (e) => reject(e);
                 
-                await el.play();
+                // Explicitly call play
+                el.play().catch(e => reject(e));
              } catch (err) {
                  reject(err);
              }
         });
 
         // Race: Audio Setup vs 1.5s Timeout
-        // If audio takes too long, we skip it to save the video recording.
         destNode = await Promise.race([
             audioSetupPromise,
             new Promise<MediaStreamAudioDestinationNode>((_, reject) => setTimeout(() => reject("Audio init timeout"), 1500))
@@ -167,8 +172,14 @@ export async function generatePropertyVideo(
     } catch (e) {
         console.warn("[VideoGen] Audio failed or timed out. Proceeding with SILENT video.", e);
         // Full cleanup to be safe
-        if (audioEl) { audioEl.pause(); audioEl = null; }
-        if (audioCtx) { try { audioCtx.close(); } catch {} audioCtx = null; }
+        if (audioEl) { 
+            (audioEl as HTMLAudioElement).pause(); 
+            audioEl = null; 
+        }
+        if (audioCtx) { 
+            try { audioCtx.close(); } catch {} 
+            audioCtx = null; 
+        }
         gainNode = null;
         destNode = null;
     }
