@@ -21,7 +21,31 @@ const TITLE_DURATION = 2500; // 2.5s
 const STATS_DURATION = 2500; // 2.5s
 const IMAGE_DURATION = 2500; // 2.5s per image
 
-// ... (helper functions omitted) ...
+// Helper to get proxied URL for external images
+function getProxiedUrl(url: string): string {
+    if (!url || url.startsWith('data:') || url.startsWith('blob:')) return url;
+    try {
+        const parsed = new URL(url);
+        if (parsed.origin !== window.location.origin) {
+            return `/.netlify/functions/proxy-image?url=${encodeURIComponent(url)}`;
+        }
+    } catch { /* not a valid URL */ }
+    return url;
+}
+
+// Helper to load image
+const loadImage = (url: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const proxiedUrl = getProxiedUrl(url);
+        if (proxiedUrl !== url || url.startsWith('data:')) {
+            img.crossOrigin = "Anonymous";
+        }
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error(`Failed to load ${url}`));
+        img.src = proxiedUrl;
+    });
+};
 
 /**
  * Generates a video Blob from property data using Canvas + MediaRecorder.
