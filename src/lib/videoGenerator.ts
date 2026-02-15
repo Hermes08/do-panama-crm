@@ -85,72 +85,95 @@ export async function generatePropertyVideo(
 
     console.log(`[VideoGen] Generating video with ${loadedImages.length} images, ${IMAGE_DURATION / 1000}s each`);
 
-    // 3. Setup Audio & Recorder
-    let audioEl: HTMLAudioElement | null = null;
+    // 3. Setup Audio (with strict fallback)
     let audioCtx: AudioContext | null = null;
-    let sourceNode: MediaElementAudioSourceNode | null = null;
+    let audioEl: HTMLAudioElement | null = null;
     let gainNode: GainNode | null = null;
     let destNode: MediaStreamAudioDestinationNode | null = null;
     
-    // Use local file, cache busted
+    // Default to silent video first
+    const canvasStream = canvas.captureStream(FPS);
+    const combinedStream = new MediaStream(canvasStream.getTracks());
+    
     const musicUrl = "/audio/background.mp3"; 
 
     try {
-        console.log(`[VideoGen] Initializing audio from ${musicUrl}`);
-        audioEl = new Audio(musicUrl);
-        audioEl.crossOrigin = "anonymous";
-        audioEl.loop = true;
+        console.log(`[VideoGen] Attempting to load audio from ${musicUrl}`);
         
-        // Use Web Audio API to capture stream WITHOUT playing to speakers
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContext) {
-            audioCtx = new AudioContext();
-            
-            // Resume context immediately (requires user gesture, provided by button click)
-            if (audioCtx.state === 'suspended') {
-                await audioCtx.resume();
+        // Timeout promise to enforce fallback
+        const audioSetupPromise = new Promise<void>(async (resolve, reject) => {
+             const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+             if (!AudioContext) return reject("Web Audio API not supported");
+
+             // 1. Create Context
+             const ctx = new AudioContext();
+             audioCtx = ctx;
+
+             // 2. Resume if suspended (critical for Chrome)
+             if (ctx.state === 'suspended') {
+                 await ctx.resume();
+             }
+             
+             // 3. Setup Element & Graph
+             const el = new Audio(musicUrl);
+             el.crossOrigin = "anonymous";
+             el.loop = true;
+             audioEl = el;
+
+             const source = ctx.createMediaElementSource(el);
+             const gain = ctx.createGain();
+             const dest = ctx.createMediaStreamDestination();
+             
+             gain.gain.value = 0.4; // Default volume
+             
+             source.connect(gain);
+             gain.connect(dest);
+             
+             gainNode = gain;
+             destNode = dest;
+
+             // 4. Wait for playback to actually result in data
+             el.onplaying = () => resolve();
+             el.onerror = (e) => reject(e);
+             
+             await el.play();
+        });
+
+        // Race: Audio Setup vs 1.5s Timeout
+        // If audio takes too long, we skip it to save the video recording.
+        await Promise.race([
+            audioSetupPromise,
+            new Promise((_, reject) => setTimeout(() => reject("Audio init timeout"), 1500))
+        ]);
+
+        console.log("[VideoGen] Audio initialized successfully");
+
+        // ONLY add track if setup fully succeeded
+        if (destNode && destNode.stream) {
+            const audioTracks = destNode.stream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                 combinedStream.addTrack(audioTracks[0]);
+                 console.log("[VideoGen] Audio track added to combined stream");
             }
-
-            sourceNode = audioCtx.createMediaElementSource(audioEl);
-            gainNode = audioCtx.createGain();
-            destNode = audioCtx.createMediaStreamDestination();
-            
-            // Set initial volume (background level)
-            gainNode.gain.value = 0.4;
-
-            // Connect: Source -> Gain -> Destination
-            sourceNode.connect(gainNode);
-            gainNode.connect(destNode);
-            
-            // Attempt to play
-            await audioEl.play();
-            console.log("[VideoGen] Audio playing and routed to stream");
         }
+
     } catch (e) {
-        console.warn("[VideoGen] Audio setup failed, proceeding with silent video", e);
-        // Cleanup if partial failure
+        console.warn("[VideoGen] Audio failed or timed out. Proceeding with SILENT video.", e);
+        // Full cleanup to be safe
         if (audioEl) { audioEl.pause(); audioEl = null; }
-        if (audioCtx) { audioCtx.close(); audioCtx = null; }
+        if (audioCtx) { try { audioCtx.close(); } catch {} audioCtx = null; }
+        gainNode = null;
         destNode = null;
-    }
-
-    const stream = canvas.captureStream(FPS);
-    
-    // Add audio track ONLY if fully initialized
-    if (destNode && destNode.stream) {
-        const audioTracks = destNode.stream.getAudioTracks();
-        if (audioTracks.length > 0) {
-            console.log("[VideoGen] WebAudio track added to stream");
-            stream.addTrack(audioTracks[0]);
-        }
     }
 
     const mimeType = MediaRecorder.isTypeSupported("video/webm; codecs=vp9")
         ? "video/webm; codecs=vp9"
         : "video/webm";
 
-    console.log(`[VideoGen] Starting recorder with mimeType: ${mimeType}`);
-    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2500000 });
+    console.log(`[VideoGen] Starting recorder with mimeType: ${mimeType}, Tracks: ${combinedStream.getTracks().length}`);
+    
+    // Use the combined stream (Video + Optional Audio)
+    const recorder = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 2500000 });
     const chunks: Blob[] = [];
     
     recorder.ondataavailable = (e) => {
@@ -168,14 +191,9 @@ export async function generatePropertyVideo(
     });
 
     recorder.onstop = () => {
-        if (audioEl) {
-            audioEl.pause(); 
-            audioEl = null;
-        }
-        if (audioCtx) {
-            if (audioCtx.state !== 'closed') audioCtx.close();
-            audioCtx = null;
-        }
+        // Cleanup Audio
+        if (audioEl) { audioEl.pause(); audioEl = null; }
+        if (audioCtx) { try { audioCtx.close(); } catch {} audioCtx = null; }
 
         const blob = new Blob(chunks, { type: mimeType });
         console.log(`[VideoGen] Recording finished. Blob size: ${blob.size} bytes`);
