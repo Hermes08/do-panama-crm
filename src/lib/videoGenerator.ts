@@ -89,6 +89,7 @@ export async function generatePropertyVideo(
     let audioEl: HTMLAudioElement | null = null;
     let audioCtx: AudioContext | null = null;
     let sourceNode: MediaElementAudioSourceNode | null = null;
+    let gainNode: GainNode | null = null;
     let destNode: MediaStreamAudioDestinationNode | null = null;
     
     // Use local file, cache busted
@@ -111,10 +112,15 @@ export async function generatePropertyVideo(
             }
 
             sourceNode = audioCtx.createMediaElementSource(audioEl);
+            gainNode = audioCtx.createGain();
             destNode = audioCtx.createMediaStreamDestination();
             
-            // Connect ONLY to destination, NOT to audioCtx.destination (speakers)
-            sourceNode.connect(destNode);
+            // Set initial volume (background level)
+            gainNode.gain.value = 0.4;
+
+            // Connect: Source -> Gain -> Destination
+            sourceNode.connect(gainNode);
+            gainNode.connect(destNode);
             
             // Attempt to play
             await audioEl.play();
@@ -122,7 +128,7 @@ export async function generatePropertyVideo(
         }
     } catch (e) {
         console.warn("[VideoGen] Audio setup failed, proceeding with silent video", e);
-        // Ensure we don't use broken audio components
+        // Cleanup if partial failure
         if (audioEl) { audioEl.pause(); audioEl = null; }
         if (audioCtx) { audioCtx.close(); audioCtx = null; }
         destNode = null;
@@ -189,6 +195,8 @@ export async function generatePropertyVideo(
     // or the tab is throttled.
     const totalDuration = TITLE_DURATION + STATS_DURATION + (loadedImages.length * IMAGE_DURATION);
     const totalFrames = Math.ceil(totalDuration / FRAME_INTERVAL);
+    const FADE_OUT_FRAMES = 3 * FPS; // Fade out audio over last 3 seconds
+
     let currentFrame = 0;
 
     console.log(`[VideoGen] Total duration: ${(totalDuration / 1000).toFixed(1)}s, Total frames: ${totalFrames}`);
@@ -204,6 +212,17 @@ export async function generatePropertyVideo(
 
         // Virtual elapsed time based on frame count (not wall clock)
         const elapsed = currentFrame * FRAME_INTERVAL;
+
+        // --- Audio Fade Out Logic ---
+        // If we are nearing the end, fade out the volume
+        if (gainNode && audioCtx && audioCtx.state === 'running') {
+             const framesRemaining = totalFrames - currentFrame;
+             if (framesRemaining <= FADE_OUT_FRAMES) {
+                 // Linear fade 0.4 -> 0
+                 const fadeProgress = framesRemaining / FADE_OUT_FRAMES; // 1.0 -> 0.0
+                 gainNode.gain.value = 0.4 * fadeProgress;
+             }
+        }
 
         // Clear
         ctx.fillStyle = "#0f172a"; // Slate 900
