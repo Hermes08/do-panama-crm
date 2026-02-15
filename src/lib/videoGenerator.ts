@@ -177,7 +177,7 @@ export async function generatePropertyVideo(
             audioEl = null; 
         }
         if (audioCtx) { 
-            try { audioCtx.close(); } catch {} 
+            try { (audioCtx as AudioContext).close(); } catch {} 
             audioCtx = null; 
         }
         gainNode = null;
@@ -210,8 +210,14 @@ export async function generatePropertyVideo(
 
     recorder.onstop = () => {
         // Cleanup Audio
-        if (audioEl) { audioEl.pause(); audioEl = null; }
-        if (audioCtx) { try { audioCtx.close(); } catch {} audioCtx = null; }
+        if (audioEl) { 
+            (audioEl as HTMLAudioElement).pause(); 
+            audioEl = null; 
+        }
+        if (audioCtx) { 
+            try { (audioCtx as AudioContext).close(); } catch {} 
+            audioCtx = null; 
+        }
 
         const blob = new Blob(chunks, { type: mimeType });
         console.log(`[VideoGen] Recording finished. Blob size: ${blob.size} bytes`);
