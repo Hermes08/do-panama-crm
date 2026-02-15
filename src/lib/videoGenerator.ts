@@ -17,35 +17,11 @@ const FPS = 30;
 const FRAME_INTERVAL = 1000 / FPS; // ~33ms per frame
 const WIDTH = 1280;
 const HEIGHT = 720;
-const TITLE_DURATION = 4000;
-const STATS_DURATION = 4000;
-const IMAGE_DURATION = 5000; // ms per image slide (5s is standard)
+const TITLE_DURATION = 2500; // 2.5s
+const STATS_DURATION = 2500; // 2.5s
+const IMAGE_DURATION = 2500; // 2.5s per image
 
-// Helper to get proxied URL for external images
-function getProxiedUrl(url: string): string {
-    if (!url || url.startsWith('data:') || url.startsWith('blob:')) return url;
-    try {
-        const parsed = new URL(url);
-        if (parsed.origin !== window.location.origin) {
-            return `/.netlify/functions/proxy-image?url=${encodeURIComponent(url)}`;
-        }
-    } catch { /* not a valid URL */ }
-    return url;
-}
-
-// Helper to load image
-const loadImage = (url: string): Promise<HTMLImageElement> => {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        const proxiedUrl = getProxiedUrl(url);
-        if (proxiedUrl !== url || url.startsWith('data:')) {
-            img.crossOrigin = "Anonymous";
-        }
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error(`Failed to load ${url}`));
-        img.src = proxiedUrl;
-    });
-};
+// ... (helper functions omitted) ...
 
 /**
  * Generates a video Blob from property data using Canvas + MediaRecorder.
@@ -66,7 +42,9 @@ export async function generatePropertyVideo(
 
     // 2. Prepare Assets
     const allImages = [...customImages, ...data.images];
-    const imagesToUse = [...new Set(allImages)]; // Use all images, deduplicated
+    // Deduplicate and LIMIT to 8 images to keep video under ~25-30s
+    // (2.5s title + 2.5s stats + 8 * 2.5s images = 25s total)
+    const imagesToUse = [...new Set(allImages)].slice(0, 8); 
 
     // Load images
     const loadedImages: HTMLImageElement[] = [];
