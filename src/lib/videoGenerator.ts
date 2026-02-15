@@ -85,8 +85,45 @@ export async function generatePropertyVideo(
 
     console.log(`[VideoGen] Generating video with ${loadedImages.length} images, ${IMAGE_DURATION / 1000}s each`);
 
-    // 3. Setup Recorder
+    // 3. Setup Audio & Recorder
+    let audioEl: HTMLAudioElement | null = null;
+    let audioStream: MediaStream | null = null;
+    const musicUrl = "/audio/background.mp3"; // Default copyright-free luxury beat
+
+    try {
+        console.log(`[VideoGen] Initializing audio from ${musicUrl}`);
+        audioEl = new Audio(musicUrl);
+        audioEl.crossOrigin = "anonymous";
+        audioEl.loop = true;
+        // Start playing silently immediately to capture user gesture
+        audioEl.volume = 0; 
+        await audioEl.play();
+        
+        // Capture stream
+        // @ts-ignore: captureStream is standard but types might be missing
+        if (typeof audioEl.captureStream === 'function') {
+             // @ts-ignore
+            audioStream = audioEl.captureStream();
+        } else if (typeof (audioEl as any).mozCaptureStream === 'function') {
+             // @ts-ignore
+            audioStream = (audioEl as any).mozCaptureStream();
+        }
+    } catch (e) {
+        console.warn("[VideoGen] Audio initialization failed (likely no user gesture or missing file)", e);
+    }
+
     const stream = canvas.captureStream(FPS);
+    
+    // Add audio track if available
+    if (audioStream) {
+        const audioTracks = audioStream.getAudioTracks();
+        if (audioTracks.length > 0) {
+            console.log("[VideoGen] Audio track added to stream");
+            stream.addTrack(audioTracks[0]);
+            if (audioEl) audioEl.volume = 0.5; // Set volume for recording
+        }
+    }
+
     const mimeType = MediaRecorder.isTypeSupported("video/webm; codecs=vp9")
         ? "video/webm; codecs=vp9"
         : "video/webm";
@@ -106,6 +143,11 @@ export async function generatePropertyVideo(
 
     recorder.onstop = () => {
         const blob = new Blob(chunks, { type: mimeType });
+        if (audioEl) {
+            audioEl.pause();
+            audioEl.src = "";
+            audioEl = null;
+        }
         resolveCompletion(blob);
     };
 
